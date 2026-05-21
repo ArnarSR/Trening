@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trening">
+<title>Treningsdashboard — Arnar</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0f0f0f;--bg2:#181818;--bg3:#242424;
+  --border:rgba(255,255,255,0.07);--border-hi:rgba(255,255,255,0.14);
+  --text:#f0ede8;--text2:#999;--text3:#555;
+  --accent:#c8f060;--accent2:#8bffc8;--warn:#ffb347;--danger:#ff6b6b;--info:#60b4ff;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+  --r:10px;--rlg:14px;
+  --bottom-bar:60px;--safe-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;overflow:hidden;}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;}
+.app{display:flex;flex-direction:column;height:100vh;height:100dvh;}
+.sidebar{display:none;}
+.main{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px 16px calc(var(--bottom-bar) + var(--safe-bottom) + 16px);-webkit-overflow-scrolling:touch;}
+.bottom-nav{display:flex;align-items:stretch;background:var(--bg2);border-top:0.5px solid var(--border);height:var(--bottom-bar);padding-bottom:var(--safe-bottom);flex-shrink:0;position:sticky;bottom:0;z-index:100;}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:500;color:var(--text3);cursor:pointer;border:none;background:none;transition:color .15s;-webkit-tap-highlight-color:transparent;padding:6px 0;}
+.bn-item.active{color:var(--accent);}
+.bn-icon{font-size:20px;line-height:1;}
+@media(min-width:768px){
+  .app{flex-direction:row;}
+  .sidebar{display:flex;flex-direction:column;width:210px;flex-shrink:0;background:var(--bg2);border-right:0.5px solid var(--border);padding:20px 0;overflow-y:auto;}
+  .main{padding:24px 28px;}
+  .bottom-nav{display:none;}
+}
+.sidebar-logo{padding:0 16px 18px;border-bottom:0.5px solid var(--border);margin-bottom:10px;}
+.sidebar-logo .name{font-size:13px;font-weight:600;}
+.sidebar-logo .sub{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px;}
+.sidebar-logo .pr{font-size:20px;font-weight:700;color:var(--accent);font-family:var(--mono);margin-top:6px;}
+.nav-section{padding:0 8px;margin-bottom:4px;}
+.nav-label{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;font-family:var(--mono);padding:5px 8px 3px;}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;font-size:13px;color:var(--text2);cursor:pointer;transition:all .12s;border:none;background:none;width:100%;text-align:left;}
+.nav-item:hover,.nav-item.active{background:var(--bg3);color:var(--text);}
+.nav-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.dot-green{background:var(--accent2);}.dot-blue{background:var(--info);}.dot-gray{background:var(--text3);}
+.sidebar-bottom{margin-top:auto;padding:12px 8px 0;border-top:0.5px solid var(--border);}
+.conn-row{display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:11px;font-family:var(--mono);color:var(--text3);}
+.conn-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.conn-dot.ok{background:var(--accent);}.conn-dot.err{background:var(--danger);}.conn-dot.pend{background:var(--warn);animation:pulse 1.2s infinite;}
+.view{display:none;}.view.active{display:block;}
+.page-header{margin-bottom:16px;}
+.page-title{font-size:18px;font-weight:600;}
+.page-sub{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px;}
+.hero-strip{display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:14px 16px;margin-bottom:14px;}
+.hero-pr{font-size:28px;font-weight:700;color:var(--accent);font-family:var(--mono);}
+.hero-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+.hero-right{text-align:right;}
+.hero-phase{font-size:12px;font-weight:600;font-family:var(--mono);}
+.hero-phase-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+@media(min-width:500px){.stat-grid{grid-template-columns:repeat(4,1fr);}}
+.stat-card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 14px;}
+.stat-label{font-size:9px;font-weight:500;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;font-family:var(--mono);margin-bottom:4px;}
+.stat-val{font-size:20px;font-weight:600;font-family:var(--mono);}
+.stat-val.accent{color:var(--accent);}
+.stat-sub{font-size:10px;color:var(--text2);margin-top:2px;}
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.sec-title{font-size:10px;font-weight:500;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono);}
+.card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);overflow:hidden;margin-bottom:12px;}
+.okt-row{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background .1s;-webkit-tap-highlight-color:transparent;min-height:52px;}
+.okt-row:last-child{border-bottom:none;}
+.okt-row:active,.okt-row:hover{background:var(--bg3);}
+.okt-row.selected{background:rgba(200,240,96,0.05);border-left:2px solid var(--accent);padding-left:12px;}
+.okt-type{font-size:9px;font-family:var(--mono);font-weight:500;padding:2px 6px;border-radius:4px;flex-shrink:0;white-space:nowrap;}
+.type-s2{background:rgba(139,255,200,0.1);color:var(--accent2);}
+.type-bk{background:rgba(255,107,107,0.12);color:var(--danger);}
+.type-ts{background:rgba(96,180,255,0.12);color:var(--info);}
+.type-st{background:rgba(176,127,255,0.12);color:#b07fff;}
+.type-ra{background:rgba(200,240,96,0.15);color:var(--accent);}
+.type-re{background:rgba(255,179,71,0.12);color:var(--warn);}
+.okt-center{flex:1;min-width:0;}
+.okt-name{font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.okt-date{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:1px;}
+.okt-right{flex-shrink:0;text-align:right;}
+.okt-hr{font-size:11px;color:var(--text2);font-family:var(--mono);}
+.okt-status{font-size:9px;font-family:var(--mono);padding:2px 5px;border-radius:3px;margin-top:2px;display:inline-block;}
+.status-done{background:rgba(200,240,96,0.1);color:var(--accent);}
+.status-todo{background:rgba(255,255,255,0.05);color:var(--text3);}
+.status-skip{background:rgba(255,107,107,0.1);color:var(--danger);}
+.okt-row-featured{background:linear-gradient(135deg,rgba(200,240,96,0.08) 0%,rgba(200,240,96,0.03) 100%);border-left:3px solid var(--accent);padding-left:11px;min-height:60px;}
+.okt-row-featured .okt-name{font-weight:600;font-size:14px;}
+.okt-mark-btn{display:flex;align-items:center;gap:4px;padding:6px 10px;background:rgba(200,240,96,0.15);border:0.5px solid var(--accent);color:var(--accent);border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;}
+.okt-mark-btn:active{opacity:0.7;}
+.okt-mark-btn.done{background:rgba(200,240,96,0.2);}
+.detail-panel{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:12px;display:none;}
+.detail-panel.open{display:block;}
+.detail-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;}
+.detail-title{font-size:15px;font-weight:600;}
+.detail-meta{font-size:10px;color:var(--text2);font-family:var(--mono);margin-top:2px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.form-field{display:flex;flex-direction:column;gap:3px;}
+.form-field.full{grid-column:1/-1;}
+.form-label{font-size:9px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-family:var(--mono);}
+.form-input{background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:7px;padding:9px 10px;font-family:var(--mono);font-size:13px;color:var(--text);outline:none;transition:border-color .15s;width:100%;-webkit-appearance:none;}
+.form-input:focus{border-color:var(--accent);}
+.form-input::placeholder{color:var(--text3);}
+select.form-input{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23555'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;}
+textarea.form-input{resize:vertical;min-height:80px;font-family:var(--sans);font-size:13px;line-height:1.6;}
+.btn{display:inline-flex;align-items:center;gap:5px;font-family:var(--sans);font-size:12px;font-weight:500;padding:9px 14px;border-radius:8px;border:0.5px solid var(--border-hi);background:transparent;color:var(--text);cursor:pointer;transition:all .12s;white-space:nowrap;-webkit-tap-highlight-color:transparent;min-height:38px;}
+.btn:active{transform:scale(0.96);}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none;}
+.btn-accent{background:var(--accent);color:#0f0f0f;border-color:var(--accent);font-weight:600;}
+.btn-sm{padding:7px 11px;font-size:11px;min-height:32px;}
+.analysis-box{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r);padding:14px;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;}
+.analysis-box.loading{color:var(--text3);font-style:italic;}
+.analysis-box.error{color:var(--danger);}
+.alert{border-radius:var(--r);padding:10px 13px;font-size:12px;margin-bottom:12px;border:0.5px solid;}
+.alert-warn{background:rgba(255,179,71,0.08);color:var(--warn);border-color:rgba(255,179,71,0.2);}
+.alert-ok{background:rgba(200,240,96,0.08);color:var(--accent);border-color:rgba(200,240,96,0.2);}
+.alert-info{background:rgba(96,180,255,0.08);color:var(--info);border-color:rgba(96,180,255,0.2);}
+.sep{height:0.5px;background:var(--border);margin:12px 0;}
+.notion-status-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2);font-family:var(--mono);margin-top:10px;}
+.notion-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0;}
+.notion-dot.ok{background:var(--accent);}.notion-dot.busy{background:var(--warn);animation:pulse 1s infinite;}.notion-dot.err{background:var(--danger);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.spinner{display:inline-block;width:10px;height:10px;border:1.5px solid rgba(255,255,255,.15);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.chip{display:inline-flex;align-items:center;font-size:11px;padding:6px 11px;border-radius:20px;border:0.5px solid var(--border-hi);background:transparent;color:var(--text2);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.chip:active{background:var(--bg3);color:var(--text);}
+.lap-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px;}
+.lap-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;min-width:380px;}
+.lap-table th{text-align:left;color:var(--text3);padding:4px 10px 7px 0;border-bottom:0.5px solid var(--border);}
+.lap-table td{padding:7px 10px 7px 0;border-bottom:0.5px solid rgba(255,255,255,0.03);color:var(--text2);}
+.lap-table tr:last-child td{border-bottom:none;}
+.lap-table td.work{color:var(--text);font-weight:500;}
+.zone-pill{display:inline-block;font-size:9px;font-weight:500;padding:1px 5px;border-radius:3px;}
+.z1p{background:rgba(85,85,85,0.2);color:#888;}.z2p{background:rgba(139,255,200,0.12);color:var(--accent2);}.z3p{background:rgba(96,180,255,0.12);color:var(--info);}.z4p{background:rgba(255,179,71,0.15);color:var(--warn);}.z5p{background:rgba(255,107,107,0.15);color:var(--danger);}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text3);}
+.empty-state .icon{font-size:32px;margin-bottom:10px;}
+.settings-section{margin-bottom:20px;}
+.settings-title{font-size:10px;font-weight:500;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;font-family:var(--mono);margin-bottom:8px;}
+.settings-card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:14px 16px;}
+.setting-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+.setting-row:last-child{margin-bottom:0;}
+.setting-label{font-size:11px;color:var(--text2);font-family:var(--mono);width:100%;margin-bottom:2px;}
+@media(min-width:500px){.setting-label{width:130px;margin-bottom:0;}}
+.setting-input{flex:1;min-width:0;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:7px;padding:9px 10px;font-family:var(--mono);font-size:12px;color:var(--text);outline:none;-webkit-appearance:none;}
+.setting-input:focus{border-color:var(--accent);}
+a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;padding:4px 0;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="name">Arnar Reiten</div>
+    <div class="sub" id="sb-fase">Laster…</div>
+    <div class="pr" id="sb-pr">—</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Oversikt</div>
+    <button class="nav-item active" onclick="showView('idag')"><span class="nav-dot dot-green"></span>I dag</button>
+    <button class="nav-item" onclick="showView('okter')"><span class="nav-dot dot-green"></span>Øktlogg</button>
+    <button class="nav-item" onclick="showView('analyse')"><span class="nav-dot dot-blue"></span>Analyse</button>
+  </div>
+  <div class="nav-section" style="margin-top:6px;">
+    <div class="nav-label">Admin</div>
+    <button class="nav-item" onclick="showView('innstillinger')"><span class="nav-dot dot-gray"></span>Innstillinger</button>
+  </div>
+  <div class="sidebar-bottom">
+    <div class="conn-row"><div class="conn-dot pend" id="d-dot"></div><span id="d-lbl">Kobler til…</span></div>
+    <div style="padding:6px 8px;"><a class="ext" href="https://script.google.com/d/1NF5EBI1vut8y3a-FGXXR10LhXSkmu5WJ9DC8plRNr8EVlhKml74jk80-/edit" target="_blank">⟳ Synk Strava</a></div>
+  </div>
+</aside>
+
+<main class="main">
+
+<!-- ══ I DAG ══ -->
+<div id="view-idag" class="view active">
+  <div class="hero-strip">
+    <div>
+      <div class="hero-pr" id="idag-dato">—</div>
+      <div class="hero-sub" id="idag-sub">I dag</div>
+    </div>
+    <div class="hero-right">
+      <div class="hero-phase" id="idag-fase">—</div>
+      <div class="hero-phase-sub" id="idag-fase-sub">—</div>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-label">Sommernatt</div><div class="stat-val" style="font-size:13px" id="countdown-sommernatt">—</div><div class="stat-sub">20. juni</div></div>
+    <div class="stat-card"><div class="stat-label">Oslo HM</div><div class="stat-val" style="font-size:13px" id="countdown-hm">—</div><div class="stat-sub">12. sept</div></div>
+    <div class="stat-card"><div class="stat-label">Gjennomført</div><div class="stat-val" id="idag-gjennomfort">—</div><div class="stat-sub">I fase</div></div>
+    <div class="stat-card"><div class="stat-label">Gjenstår</div><div class="stat-val" id="idag-gjenstaar">—</div><div class="stat-sub">I fase</div></div>
+  </div>
+
+  <!-- Dagens økt -->
+  <div class="sec-head" style="margin-top:16px;margin-bottom:8px;">
+    <div class="sec-title">Dagens økt</div>
+  </div>
+  <div id="idag-daily-section" class="card">
+    <div class="empty-state" id="idag-daily-empty"><div class="icon">✨</div>Ingen økt i dag</div>
+  </div>
+
+  <!-- Neste 7 dager -->
+  <div class="sec-head" style="margin-top:20px;margin-bottom:8px;">
+    <div class="sec-title">Neste 7 dager</div>
+  </div>
+  <div id="idag-week-section" class="card">
+    <div class="empty-state"><div class="icon">⏳</div>Laster økter…</div>
+  </div>
+</div>
+
+<!-- ══ ØKTLOGG ══ -->
+<div id="view-okter" class="view">
+  <div class="hero-strip">
+    <div>
+      <div class="hero-pr" id="hero-pr">—</div>
+      <div class="hero-sub" id="hero-sub">Laster data…</div>
+    </div>
+    <div class="hero-right">
+      <div class="hero-phase" id="hero-phase">—</div>
+      <div class="hero-phase-sub" id="hero-phase-sub">—</div>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-label">Race-PR</div><div class="stat-val accent" id="s-pr">—</div><div class="stat-sub">Grefsenkollen</div></div>
+    <div class="stat-card"><div class="stat-label">Gjennomført</div><div class="stat-val" id="s-done">—</div><div class="stat-sub">Totalt</div></div>
+    <div class="stat-card"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:15px">20. jun</div><div class="stat-sub">Sommernatt 10k</div></div>
+    <div class="stat-card"><div class="stat-label">Høstmål</div><div class="stat-val" style="font-size:15px">1:45</div><div class="stat-sub">Oslo HM sept</div></div>
+  </div>
+
+  <div class="sec-head">
+    <div class="sec-title">Øktlogg</div>
+    <button class="btn btn-sm" onclick="fetchOkter()"><span class="spinner" id="load-spin" style="display:none"></span> Oppdater</button>
+  </div>
+
+  <div class="card">
+    <div id="okt-list">
+      <div class="empty-state"><div class="icon">⏳</div>Laster økter fra Notion…</div>
+    </div>
+  </div>
+
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-top">
+      <div style="flex:1;min-width:0;">
+        <div class="detail-title" id="dp-title">—</div>
+        <div class="detail-meta" id="dp-meta">—</div>
+      </div>
+      <button class="btn btn-sm" onclick="closeDetail()">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <button class="btn btn-accent" id="dp-analyse-btn" onclick="analyseOkt()" style="flex:1;">Analyser</button>
+      <button class="btn" id="dp-save-btn" onclick="saveToNotion()" disabled style="flex:1;">→ Lagre</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field"><label class="form-label">Status</label>
+        <select class="form-input" id="f-status"><option value="Gjennomført">Gjennomført</option><option value="To Do">To Do</option><option value="Hoppet over">Hoppet over</option></select></div>
+      <div class="form-field"><label class="form-label">Type</label>
+        <select class="form-input" id="f-type"><option value="Sone 2">Sone 2</option><option value="Terskel">Terskel</option><option value="Bakkeintervall">Bakkeintervall</option><option value="Styrke">Styrke</option><option value="Rehab">Rehab</option><option value="Race">Race</option></select></div>
+      <div class="form-field"><label class="form-label">Snitt-HR</label><input type="number" class="form-input" id="f-hr-avg" placeholder="163" inputmode="numeric"></div>
+      <div class="form-field"><label class="form-label">Maks-HR</label><input type="number" class="form-input" id="f-hr-max" placeholder="178" inputmode="numeric"></div>
+      <div class="form-field"><label class="form-label">Varighet (min)</label><input type="number" class="form-input" id="f-varighet" placeholder="44" inputmode="numeric"></div>
+      <div class="form-field"><label class="form-label">Pace</label><input type="text" class="form-input" id="f-pace" placeholder="5:14–5:55"></div>
+      <div class="form-field"><label class="form-label">Smerte 0–10</label><input type="number" class="form-input" id="f-smerte" min="0" max="10" placeholder="0" inputmode="numeric"></div>
+      <div class="form-field"><label class="form-label">Med vogn</label>
+        <select class="form-input" id="f-vogn"><option value="false">Nei</option><option value="true">Ja</option></select></div>
+      <div class="form-field full"><label class="form-label">Vurdering</label>
+        <textarea class="form-input" id="f-vurdering" placeholder="Hvordan gikk det?"></textarea></div>
+    </div>
+    <div id="dp-analysis-section" style="display:none;">
+      <div class="sep"></div>
+      <div class="sec-head" style="margin-bottom:8px;">
+        <div class="sec-title">Treneranalyse</div>
+      </div>
+      <div class="analysis-box" id="dp-analysis-text"></div>
+      <div class="notion-status-row" id="dp-notion-status" style="display:none;">
+        <div class="notion-dot" id="dp-notion-dot"></div><span id="dp-notion-lbl">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ANALYSE ══ -->
+<div id="view-analyse" class="view">
+  <div class="page-header"><div class="page-title">Analyse</div><div class="page-sub">Spør om treningsdata og progresjon</div></div>
+  <div class="chip-row">
+    <button class="chip" onclick="setQuery('Analyser utviklingen i alle bakkeintervallene. Vis trend i HR og pace per arbeidsrap.')">Intervall-progresjon</button>
+    <button class="chip" onclick="setQuery('Er jeg polarisert nok? Sonedistribusjon S2 vs S3/S4/S5.')">Sonedistribusjon</button>
+    <button class="chip" onclick="setQuery('Restitusjonsvurdering for Fase 0 — hva bør jeg gjøre denne uka?')">Restitusjon nå</button>
+    <button class="chip" onclick="setQuery('Analyser Grefsenkollen race-data. Hva gikk bra, hva kan forbedres?')">Race analyse</button>
+    <button class="chip" onclick="setQuery('Hva bør fokuset være i Fase 1 (juni) mot sub-1:45 på Oslo Halvmaraton?')">Fase 1 plan</button>
+  </div>
+  <textarea class="form-input" id="analyse-query" style="width:100%;min-height:90px;resize:vertical;font-family:var(--sans);margin-bottom:8px;" placeholder="Skriv spørsmålet ditt…"></textarea>
+  <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <button class="btn" onclick="document.getElementById('analyse-query').value=''" style="flex:1;">Tøm</button>
+    <button class="btn btn-accent" id="analyse-run-btn" onclick="runAnalyse()" style="flex:2;">Kjør analyse</button>
+  </div>
+  <div id="analyse-result-section" style="display:none;">
+    <div class="sec-head" style="margin-bottom:8px;">
+      <div class="sec-title">Resultat</div>
+      <button class="btn btn-sm" id="analyse-save-btn" onclick="saveAnalyseToNotion()" style="display:none;">→ Notion</button>
+    </div>
+    <div class="analysis-box" id="analyse-result-text"></div>
+    <div class="notion-status-row" id="analyse-notion-status" style="display:none;">
+      <div class="notion-dot" id="analyse-notion-dot"></div><span id="analyse-notion-lbl">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ INNSTILLINGER ══ -->
+<div id="view-innstillinger" class="view">
+  <div class="page-header"><div class="page-title">Innstillinger</div></div>
+  <div class="settings-section">
+    <div class="settings-title">Worker URL</div>
+    <div class="settings-card">
+      <div class="alert alert-info" style="margin-bottom:12px;">Dette er URL-en til din Cloudflare Worker. Sett den én gang — gjelder alle enheter.</div>
+      <div class="setting-row">
+        <span class="setting-label">Worker URL</span>
+        <input type="text" class="setting-input" id="s-worker-url" placeholder="https://trening-arnar.arnar.workers.dev" oninput="saveSettings()">
+      </div>
+      <div class="sep"></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="testWorker()">Test tilkobling</button>
+        <span id="worker-test-result" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
+    <div class="settings-title">Pulssoner (maks 199)</div>
+    <div class="settings-card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;font-family:var(--mono);">
+        <div style="color:var(--text2);">S1</div><div style="color:var(--text3);">&lt;120</div>
+        <div style="color:var(--accent2);">S2</div><div style="color:var(--text2);">120–145</div>
+        <div style="color:var(--info);">S3</div><div style="color:var(--text2);">146–162</div>
+        <div style="color:var(--warn);">S4</div><div style="color:var(--text2);">163–178</div>
+        <div style="color:var(--danger);">S5</div><div style="color:var(--text2);">179–199</div>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
+    <div class="settings-title">Lenker</div>
+    <div class="settings-card">
+      <a class="ext" href="https://script.google.com/d/1NF5EBI1vut8y3a-FGXXR10LhXSkmu5WJ9DC8plRNr8EVlhKml74jk80-/edit" target="_blank">⟳ Strava import Apps Script</a>
+      <a class="ext" href="https://www.notion.so/953ee9299ea345fb8a3d77cf8237116a" target="_blank">📋 Notion Treningsøkter</a>
+      <a class="ext" href="https://www.strava.com/athlete/training" target="_blank">🏃 Strava</a>
+    </div>
+  </div>
+  <div class="settings-section">
+    <div class="settings-title">Tilkobling</div>
+    <div class="settings-card">
+      <div class="conn-row" style="padding:4px 0;"><div class="conn-dot pend" id="m-dot"></div><span id="m-lbl" style="font-size:12px;">Worker…</span></div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<nav class="bottom-nav">
+  <button class="bn-item active" id="bn-idag" onclick="showView('idag')"><span class="bn-icon">📅</span><span>I dag</span></button>
+  <button class="bn-item" id="bn-okter" onclick="showView('okter')"><span class="bn-icon">📋</span><span>Økter</span></button>
+  <button class="bn-item" id="bn-analyse" onclick="showView('analyse')"><span class="bn-icon">📊</span><span>Analyse</span></button>
+  <button class="bn-item" id="bn-innstillinger" onclick="showView('innstillinger')"><span class="bn-icon">⚙️</span><span>Innst.</span></button>
+</nav>
+</div>
+
+<script>
+// ── Config ───────────────────────────────────────────────────────────────────
+const ZONES=[{n:'S1',min:0,max:119,c:'z1p'},{n:'S2',min:120,max:145,c:'z2p'},{n:'S3',min:146,max:162,c:'z3p'},{n:'S4',min:163,max:178,c:'z4p'},{n:'S5',min:179,max:999,c:'z5p'}];
+function getZone(hr){return ZONES.find(z=>hr>=z.min&&hr<=z.max)||ZONES[0];}
+
+const TYPE_MAP={'Sone 2':'type-s2','Bakkeintervall':'type-bk','Terskel':'type-ts','Styrke':'type-st','Race':'type-ra','Rehab':'type-re'};
+const STATUS_MAP={'Gjennomført':'status-done','To Do':'status-todo','Hoppet over':'status-skip'};
+const STATUS_ICON={'Gjennomført':'✓','To Do':'·','Hoppet over':'✕'};
+
+// ── State ────────────────────────────────────────────────────────────────────
+let allOkter = [];
+let currentOkt = null;
+let lastAnalysis = '';
+let lastAnalysisTitle = '';
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+function getWorkerUrl(){try{return localStorage.getItem('worker_url')||'';}catch(e){return '';}}
+function saveSettings(){
+  try{localStorage.setItem('worker_url',document.getElementById('s-worker-url').value.trim());}catch(e){}
+  updateDots();
+}
+function loadSettings(){
+  try{document.getElementById('s-worker-url').value=localStorage.getItem('worker_url')||'';}catch(e){}
+  updateDots();
+}
+function updateDots(){
+  const ok=!!getWorkerUrl();
+  const cls='conn-dot '+(ok?'ok':'err');
+  const lbl=ok?'Worker tilkoblet':'Sett Worker URL under Innstillinger';
+  ['d-dot','m-dot'].forEach(id=>{const el=document.getElementById(id);if(el)el.className=cls;});
+  ['d-lbl','m-lbl'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=lbl;});
+}
+async function testWorker(){
+  const url=getWorkerUrl();
+  const res=document.getElementById('worker-test-result');
+  if(!url){res.textContent='⚠ Ingen URL';res.style.color='var(--warn)';return;}
+  res.textContent='Tester…';
+  try{
+    const r=await fetch(url+'/api/okter');
+    if(r.ok){const d=await r.json();res.textContent='✓ '+d.okter.length+' økter hentet';res.style.color='var(--accent)';}
+    else{res.textContent='✗ '+r.status;res.style.color='var(--danger)';}
+  }catch(e){res.textContent='✗ '+e.message;res.style.color='var(--danger)';}
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.bn-item').forEach(b=>b.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  const si=document.querySelector(`.nav-item[onclick="showView('${name}')"]`);if(si)si.classList.add('active');
+  const bi=document.getElementById('bn-'+name);if(bi)bi.classList.add('active');
+  document.querySelector('.main').scrollTo(0,0);
+}
+
+// ── Fetch økter ───────────────────────────────────────────────────────────────
+async function fetchOkter(){
+  const url=getWorkerUrl();
+  const spin=document.getElementById('load-spin');
+  spin.style.display='inline-block';
+  if(!url){renderEmpty('Sett Worker URL under Innstillinger →');spin.style.display='none';return;}
+  try{
+    const r=await fetch(url+'/api/okter');
+    const data=await r.json();
+    allOkter=data.okter||[];
+    renderOkter();
+    renderIdagView();
+    updateStats();
+  }catch(e){renderEmpty('Klarte ikke hente fra Worker: '+e.message);}
+  spin.style.display='none';
+}
+
+function renderOkter(){
+  const list=document.getElementById('okt-list');
+  if(!allOkter.length){renderEmpty('Ingen økter funnet i Notion');return;}
+  list.innerHTML='';
+  allOkter.forEach(okt=>{
+    const typeClass=TYPE_MAP[okt.type]||'type-s2';
+    const statusClass=STATUS_MAP[okt.status]||'status-todo';
+    const statusIcon=STATUS_ICON[okt.status]||'·';
+    const hrTxt=(okt.faktiskSnittHR&&okt.faktiskMaksHR)?`${okt.faktiskSnittHR}/${okt.faktiskMaksHR}`:'—';
+    const dato=okt.dato?formatDato(okt.dato):'—';
+    const div=document.createElement('div');
+    div.className='okt-row';
+    div.dataset.id=okt.id;
+    div.innerHTML=`
+      <span class="okt-type ${typeClass}">${okt.type?.toUpperCase().slice(0,5)||'ØKT'}</span>
+      <div class="okt-center">
+        <div class="okt-name">${esc(okt.navn)}</div>
+        <div class="okt-date">${dato}${okt.fase?' · '+okt.fase:''}</div>
+      </div>
+      <div class="okt-right">
+        <div class="okt-hr">${hrTxt}</div>
+        <div class="okt-status ${statusClass}">${statusIcon}</div>
+      </div>`;
+    div.onclick=()=>openDetail(okt,div);
+    list.appendChild(div);
+  });
+}
+
+function renderEmpty(msg){
+  document.getElementById('okt-list').innerHTML=`<div class="empty-state"><div class="icon">📭</div>${esc(msg)}</div>`;
+}
+
+function updateStats(){
+  const done=allOkter.filter(o=>o.status==='Gjennomført').length;
+  document.getElementById('s-done').textContent=done;
+  const race=allOkter.find(o=>o.type==='Race'&&o.navn?.includes('23:17'));
+  document.getElementById('s-pr').textContent=race?'23:17':'—';
+  document.getElementById('hero-pr').textContent='23:17';
+  document.getElementById('hero-sub').textContent='Grefsenkollen · 20. mai 2026 · PR 🏆';
+  document.getElementById('hero-phase').textContent='Fase 0';
+  document.getElementById('hero-phase-sub').textContent='Aktiv restitusjon';
+  document.getElementById('sb-fase').textContent='Fase 0 · Restitusjon';
+  document.getElementById('sb-pr').textContent='23:17 🎉';
+}
+
+// ── Detail panel ──────────────────────────────────────────────────────────────
+function openDetail(okt,el){
+  document.querySelectorAll('.okt-row').forEach(r=>r.classList.remove('selected'));
+  el.classList.add('selected');
+  currentOkt=okt;
+  document.getElementById('dp-title').textContent=okt.navn;
+  document.getElementById('dp-meta').textContent=(okt.dato?formatDato(okt.dato):'')+' · '+(okt.fase||'');
+  document.getElementById('f-status').value=okt.status||'Gjennomført';
+  document.getElementById('f-type').value=okt.type||'Sone 2';
+  document.getElementById('f-hr-avg').value=okt.faktiskSnittHR||'';
+  document.getElementById('f-hr-max').value=okt.faktiskMaksHR||'';
+  document.getElementById('f-varighet').value=okt.varighet||'';
+  document.getElementById('f-pace').value=okt.pace||'';
+  document.getElementById('f-smerte').value=okt.smerte!=null?okt.smerte:'';
+  document.getElementById('f-vogn').value=okt.medVogn?'true':'false';
+  document.getElementById('f-vurdering').value=okt.vurdering||'';
+  document.getElementById('dp-analysis-section').style.display='none';
+  document.getElementById('dp-save-btn').disabled=false;
+  lastAnalysis='';
+  const panel=document.getElementById('detail-panel');
+  panel.classList.add('open');
+  setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'start'}),50);
+}
+
+function closeDetail(){
+  document.getElementById('detail-panel').classList.remove('open');
+  document.querySelectorAll('.okt-row').forEach(r=>r.classList.remove('selected'));
+  currentOkt=null;
+}
+
+// ── Analyse økt ───────────────────────────────────────────────────────────────
+async function analyseOkt(){
+  if(!currentOkt)return;
+  const btn=document.getElementById('dp-analyse-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Analyserer…';
+  const hrAvg=document.getElementById('f-hr-avg').value;
+  const hrMax=document.getElementById('f-hr-max').value;
+  const varighet=document.getElementById('f-varighet').value;
+  const pace=document.getElementById('f-pace').value;
+  const vurdering=document.getElementById('f-vurdering').value;
+  const prompt=`Du er treneren til Arnar (33 år, pappaperm, hofte/kne-rehab). Maks HR: 199 bpm.\nSoner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
+  const section=document.getElementById('dp-analysis-section');
+  const box=document.getElementById('dp-analysis-text');
+  section.style.display='block';
+  box.className='analysis-box loading';box.textContent='Analyserer…';
+  try{
+    const workerUrl=getWorkerUrl();
+    let text;
+    if(workerUrl){
+      const r=await fetch(workerUrl+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+      const d=await r.json();text=d.text;
+    } else {
+      // Fallback: kall Claude API direkte (kun i localhost/dev)
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+      const d=await r.json();text=d.content?.find(b=>b.type==='text')?.text||'Ingen respons.';
+    }
+    box.className='analysis-box';box.textContent=text;
+    lastAnalysis=text;lastAnalysisTitle=currentOkt.navn;
+    if(!document.getElementById('f-vurdering').value.trim())document.getElementById('f-vurdering').value=text;
+  }catch(e){box.className='analysis-box error';box.textContent='Feil: '+e.message;}
+  btn.disabled=false;btn.textContent='Analyser';
+}
+
+// ── Lagre til Notion ──────────────────────────────────────────────────────────
+async function saveToNotion(){
+  if(!currentOkt)return;
+  const url=getWorkerUrl();
+  if(!url){alert('Sett Worker URL under Innstillinger');showView('innstillinger');return;}
+  const statusEl=document.getElementById('dp-notion-status');
+  const dot=document.getElementById('dp-notion-dot');
+  const lbl=document.getElementById('dp-notion-lbl');
+  statusEl.style.display='flex';dot.className='notion-dot busy';lbl.textContent='Lagrer…';
+  const body={
+    status:document.getElementById('f-status').value,
+    type:document.getElementById('f-type').value,
+    vurdering:document.getElementById('f-vurdering').value||lastAnalysis,
+    pace:document.getElementById('f-pace').value,
+    medVogn:document.getElementById('f-vogn').value==='true',
+  };
+  const hrAvg=parseFloat(document.getElementById('f-hr-avg').value);
+  const hrMax=parseFloat(document.getElementById('f-hr-max').value);
+  const varighet=parseFloat(document.getElementById('f-varighet').value);
+  const smerte=parseFloat(document.getElementById('f-smerte').value);
+  if(!isNaN(hrAvg))body.faktiskSnittHR=hrAvg;
+  if(!isNaN(hrMax))body.faktiskMaksHR=hrMax;
+  if(!isNaN(varighet))body.varighet=varighet;
+  if(!isNaN(smerte))body.smerte=smerte;
+  try{
+    const r=await fetch(`${url}/api/okter/${currentOkt.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.ok){
+      dot.className='notion-dot ok';lbl.textContent='✓ Lagret i Notion';
+      // Oppdater lokal state
+      const idx=allOkter.findIndex(o=>o.id===currentOkt.id);
+      if(idx>=0)allOkter[idx]={...allOkter[idx],...body};
+    } else {
+      const e=await r.json();dot.className='notion-dot err';lbl.textContent='✗ '+(e.error||r.status);
+    }
+  }catch(e){dot.className='notion-dot err';lbl.textContent='✗ '+e.message;}
+}
+
+// ── Full analyse ──────────────────────────────────────────────────────────────
+function setQuery(text){document.getElementById('analyse-query').value=text;}
+
+async function runAnalyse(){
+  const query=document.getElementById('analyse-query').value.trim();
+  if(!query)return;
+  const btn=document.getElementById('analyse-run-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Kjører…';
+  const section=document.getElementById('analyse-result-section');
+  const box=document.getElementById('analyse-result-text');
+  section.style.display='block';box.className='analysis-box loading';box.textContent='Analyserer…';
+  document.getElementById('analyse-save-btn').style.display='none';
+
+  // Bygg kontekst fra live Notion-data
+  const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført');
+  const oktSummary=gjennomfort.slice(0,15).map(o=>`${o.dato||'?'}: ${o.navn} — HR ${o.faktiskSnittHR||'?'}/${o.faktiskMaksHR||'?'}, ${o.varighet||'?'} min, ${o.type}`).join('\n');
+  const context=`Du er treneren til Arnar (33 år, pappaperm, hofte/kne-rehab). Maks HR: 199 bpm.\nSoner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.\n\nSiste gjennomførte økter:\n${oktSummary}\n\nFase 0 restitusjon (mai). Neste: Sommernattsløpet 10k 20. juni. Mål: sub-1:45 Oslo HM 12. sept.\nSvar norsk, konkret, direkte.`;
+
+  try{
+    const workerUrl=getWorkerUrl();
+    let text;
+    if(workerUrl){
+      const r=await fetch(workerUrl+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:context+'\n\nSpørsmål: '+query})});
+      const d=await r.json();text=d.text;
+    } else {
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:context+'\n\nSpørsmål: '+query}]})});
+      const d=await r.json();text=d.content?.find(b=>b.type==='text')?.text||'Ingen respons.';
+    }
+    box.className='analysis-box';box.textContent=text;
+    lastAnalysis=text;lastAnalysisTitle='Analyse: '+query.slice(0,50);
+    document.getElementById('analyse-save-btn').style.display='inline-flex';
+  }catch(e){box.className='analysis-box error';box.textContent='Feil: '+e.message;}
+  btn.disabled=false;btn.textContent='Kjør analyse';
+}
+
+async function saveAnalyseToNotion(){
+  const url=getWorkerUrl();
+  if(!url){alert('Sett Worker URL');showView('innstillinger');return;}
+  const statusEl=document.getElementById('analyse-notion-status');
+  const dot=document.getElementById('analyse-notion-dot');
+  const lbl=document.getElementById('analyse-notion-lbl');
+  statusEl.style.display='flex';dot.className='notion-dot busy';lbl.textContent='Lagrer…';
+  try{
+    const r=await fetch(url+'/api/okter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({navn:lastAnalysisTitle||'Analyse',status:'Gjennomført',vurdering:lastAnalysis})});
+    if(r.ok){dot.className='notion-dot ok';lbl.textContent='✓ Lagret';}
+    else{const e=await r.json();dot.className='notion-dot err';lbl.textContent='✗ '+(e.error||r.status);}
+  }catch(e){dot.className='notion-dot err';lbl.textContent='✗ '+e.message;}
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function formatDato(d){
+  if(!d)return '—';
+  try{
+    const dt=new Date(d+'T12:00:00');
+    return dt.toLocaleDateString('no-NO',{day:'numeric',month:'short'});
+  }catch(e){return d;}
+}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── I DAG view ────────────────────────────────────────────────────────────────
+function getTodayDate(){
+  const today=new Date();
+  return today.toISOString().split('T')[0];
+}
+
+function getDateRange(days=7){
+  const today=new Date();
+  const dates=[];
+  for(let i=0;i<days;i++){
+    const d=new Date(today);
+    d.setDate(d.getDate()+i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+}
+
+function renderIdagView(){
+  const today=getTodayDate();
+  const dates=getDateRange(7);
+
+  // Filter dagens økt
+  const todayOkt=allOkter.find(o=>o.dato===today&&o.status!=='Hoppet over');
+  const weekOkter=allOkter.filter(o=>dates.includes(o.dato)&&o.dato!==today&&o.status!=='Hoppet over').slice(0,10);
+
+  // Update header
+  const todayDisplay=new Date(today+'T12:00:00').toLocaleDateString('no-NO',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('idag-dato').textContent=todayDisplay.charAt(0).toUpperCase()+todayDisplay.slice(1);
+  document.getElementById('idag-sub').textContent=new Date(today+'T12:00:00').toLocaleDateString('no-NO',{day:'numeric',month:'short',year:'numeric'});
+
+  // Fase fra dagens økt eller fra stats
+  const fase=todayOkt?.fase||'Fase 0';
+  const faseSub=fase==='Fase 0'?'Aktiv restitusjon':fase==='Fase 1'?'Oppbygging':'—';
+  document.getElementById('idag-fase').textContent=fase;
+  document.getElementById('idag-fase-sub').textContent=faseSub;
+
+  // Stats: gjennomført og gjenstår i fase
+  const allInFase=allOkter.filter(o=>(o.fase||'Fase 0')===fase);
+  const doneInFase=allInFase.filter(o=>o.status==='Gjennomført').length;
+  const todoInFase=allInFase.filter(o=>o.status!=='Gjennomført'&&o.status!=='Hoppet over').length;
+  document.getElementById('idag-gjennomfort').textContent=doneInFase;
+  document.getElementById('idag-gjenstaar').textContent=todoInFase;
+
+  // Render dagens økt
+  const dailySection=document.getElementById('idag-daily-section');
+  if(todayOkt){
+    dailySection.innerHTML=renderIdagOktRow(todayOkt,true);
+  }else{
+    dailySection.innerHTML='<div class="empty-state"><div class="icon">✨</div>Ingen økt i dag</div>';
+  }
+
+  // Render neste 7 dager
+  const weekSection=document.getElementById('idag-week-section');
+  if(weekOkter.length){
+    weekSection.innerHTML=weekOkter.map(o=>renderIdagOktRow(o,false)).join('');
+  }else{
+    weekSection.innerHTML='<div class="empty-state"><div class="icon">📭</div>Ingen kommende økter</div>';
+  }
+
+  // Update countdowns
+  updateCountdowns();
+}
+
+function renderIdagOktRow(okt,featured=false){
+  const typeClass=TYPE_MAP[okt.type]||'type-s2';
+  const statusClass=STATUS_MAP[okt.status]||'status-todo';
+  const statusIcon=STATUS_ICON[okt.status]||'·';
+  const hrTxt=(okt.faktiskSnittHR&&okt.faktiskMaksHR)?`${okt.faktiskSnittHR}/${okt.faktiskMaksHR}`:'—';
+  const dato=okt.dato?formatDato(okt.dato):'—';
+  const isDone=okt.status==='Gjennomført';
+
+  return`
+    <div class="okt-row${featured?' okt-row-featured':''}">
+      <span class="okt-type ${typeClass}">${okt.type?.toUpperCase().slice(0,5)||'ØKT'}</span>
+      <div class="okt-center">
+        <div class="okt-name">${esc(okt.navn)}</div>
+        <div class="okt-date">${dato}${okt.fase?' · '+okt.fase:''}</div>
+      </div>
+      <div class="okt-right">
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${!isDone?`<button class="okt-mark-btn" onclick="markAsComplete('${okt.id}')">✓ Gjennomført</button>`:''}
+          <div class="okt-hr">${hrTxt}</div>
+          <div class="okt-status ${statusClass}">${statusIcon}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function updateCountdowns(){
+  const today=new Date();
+  today.setHours(0,0,0,0);
+
+  // Sommernatt 20. juni
+  const sommernatt=new Date(2026,5,20);
+  const daysSommernatt=Math.ceil((sommernatt-today)/(1000*60*60*24));
+  const sommernattTxt=daysSommernatt>0?daysSommernatt+' dager':(daysSommernatt===0?'I dag!':'✓ Gjort');
+  document.getElementById('countdown-sommernatt').textContent=sommernattTxt;
+
+  // Oslo HM 12. september
+  const hm=new Date(2026,8,12);
+  const daysHm=Math.ceil((hm-today)/(1000*60*60*24));
+  const hmTxt=daysHm>0?daysHm+' dager':(daysHm===0?'I dag!':'✓ Gjort');
+  document.getElementById('countdown-hm').textContent=hmTxt;
+}
+
+async function markAsComplete(oktId){
+  const okt=allOkter.find(o=>o.id===oktId);
+  if(!okt)return;
+
+  const url=getWorkerUrl();
+  if(!url){alert('Sett Worker URL under Innstillinger');showView('innstillinger');return;}
+
+  try{
+    const body={status:'Gjennomført'};
+    const r=await fetch(`${url}/api/okter/${oktId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.ok){
+      okt.status='Gjennomført';
+      renderIdagView();
+    }else{alert('Klarte ikke oppdatere status');}
+  }catch(e){alert('Feil: '+e.message);}
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadSettings();
+fetchOkter();
+</script>
+</body>
+</html>

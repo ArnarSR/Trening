@@ -668,7 +668,9 @@ function renderIdagView(){
 
   // Filter dagens økt
   const todayOkt=allOkter.find(o=>o.dato===today&&o.status!=='Hoppet over');
-  const weekOkter=allOkter.filter(o=>dates.includes(o.dato)&&o.dato!==today&&o.status!=='Hoppet over').slice(0,10);
+  const weekOkter=allOkter.filter(o=>dates.includes(o.dato)&&o.dato!==today&&o.status!=='Hoppet over')
+    .sort((a,b)=>new Date(a.dato)-new Date(b.dato))
+    .slice(0,10);
 
   // Update header
   const todayDisplay=new Date(today+'T12:00:00').toLocaleDateString('no-NO',{weekday:'long',day:'numeric',month:'long'});
@@ -699,7 +701,9 @@ function renderIdagView(){
   // Render neste 7 dager
   const weekSection=document.getElementById('idag-week-section');
   if(weekOkter.length){
-    weekSection.innerHTML=weekOkter.map(o=>renderIdagOktRow(o,false)).join('');
+    const nextOktHtml=renderIdagOktRow(weekOkter[0],false,true);
+    const restHtml=weekOkter.slice(1).map(o=>renderIdagOktRow(o,false,false)).join('');
+    weekSection.innerHTML=nextOktHtml+restHtml;
   }else{
     weekSection.innerHTML='<div class="empty-state"><div class="icon">📭</div>Ingen kommende økter</div>';
   }
@@ -708,13 +712,32 @@ function renderIdagView(){
   updateCountdowns();
 }
 
-function renderIdagOktRow(okt,featured=false){
+function renderIdagOktRow(okt,featured=false,isNext=false){
   const typeClass=TYPE_MAP[okt.type]||'type-s2';
   const statusClass=STATUS_MAP[okt.status]||'status-todo';
   const statusIcon=STATUS_ICON[okt.status]||'·';
   const hrTxt=(okt.faktiskSnittHR&&okt.faktiskMaksHR)?`${okt.faktiskSnittHR}/${okt.faktiskMaksHR}`:'—';
   const dato=okt.dato?formatDato(okt.dato):'—';
   const isDone=okt.status==='Gjennomført';
+
+  if(isNext){
+    // Større "Neste økt"-stil
+    return`
+      <div style="background:linear-gradient(135deg,rgba(139,255,200,0.12) 0%,rgba(139,255,200,0.04) 100%);border:0.5px solid rgba(139,255,200,0.3);border-radius:var(--rlg);padding:16px 14px;margin-bottom:12px;">
+        <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;margin-bottom:8px;">→ Neste økt</div>
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <span class="okt-type ${typeClass}" style="font-size:10px;padding:3px 8px;flex-shrink:0;margin-top:2px;">${okt.type?.toUpperCase().slice(0,5)||'ØKT'}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:15px;font-weight:600;color:var(--accent2);">${esc(okt.navn)}</div>
+            <div style="font-size:11px;color:var(--text2);font-family:var(--mono);margin-top:2px;">${dato}${okt.fase?' · '+okt.fase:''}</div>
+          </div>
+          <div style="flex-shrink:0;text-align:right;">
+            ${!isDone?`<button class="okt-mark-btn" style="margin-bottom:6px;" onclick="markAsComplete('${okt.id}')">✓ Gjennomført</button>`:''}
+            <div style="font-size:11px;color:var(--text2);font-family:var(--mono);">${hrTxt}</div>
+          </div>
+        </div>
+      </div>`;
+  }
 
   return`
     <div class="okt-row${featured?' okt-row-featured':''}">

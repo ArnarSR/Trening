@@ -850,7 +850,7 @@ async function fetchOkter(){
 function renderOkter(){
   const list=document.getElementById('okt-list');
   if(!allOkter.length){renderEmpty('Ingen økter funnet i Notion');return;}
-  const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført'&&o.type!=='Dagbok'&&o.type!=='Race'&&o.type!=='Mål');
+  const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført'&&o.type!=='Dagbok'&&o.type!=='Mål');
   if(!gjennomfort.length){renderEmpty('Ingen gjennomførte økter ennå');return;}
   list.innerHTML='';
   gjennomfort.forEach(okt=>{
@@ -890,7 +890,7 @@ function renderEmpty(msg){
 }
 
 function updateStats(){
-  const done=allOkter.filter(o=>o.status==='Gjennomført'&&o.type!=='Dagbok'&&o.type!=='Race'&&o.type!=='Mål').length;
+  const done=allOkter.filter(o=>o.status==='Gjennomført'&&o.type!=='Dagbok'&&o.type!=='Mål').length;
   document.getElementById('s-done').textContent=done;
   const countEl=document.getElementById('okt-count');if(countEl)countEl.textContent=done;
   const race=allOkter.find(o=>o.type==='Race'&&o.navn?.includes('23:17'));
@@ -1072,8 +1072,8 @@ function renderIdagView(){
   const today=getTodayDate();
   const dates=getDateRange(7);
 
-  const todayOkt=allOkter.find(o=>o.dato===today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Race'&&o.type!=='Mål');
-  const weekOkter=allOkter.filter(o=>dates.includes(o.dato)&&o.dato!==today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Race'&&o.type!=='Mål')
+  const todayOkt=allOkter.find(o=>o.dato===today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Mål');
+  const weekOkter=allOkter.filter(o=>dates.includes(o.dato)&&o.dato!==today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Mål')
     .sort((a,b)=>new Date(a.dato)-new Date(b.dato))
     .slice(0,10);
 

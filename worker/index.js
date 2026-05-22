@@ -304,16 +304,43 @@ async function savePrinsipper(env, tekst) {
 
 // ── Google Calendar ───────────────────────────────────────────────────────────
 
-async function refreshGoogleToken(env) {
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) {
-    throw new Error('Google Calendar secrets ikke satt (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN)');
-  }
-  const form = new FormData();
-  form.append('client_id',     env.GOOGLE_CLIENT_ID.trim());
-  form.append('client_secret', env.GOOGLE_CLIENT_SECRET.trim());
-  form.append('refresh_token', env.GOOGLE_REFRESH_TOKEN.trim());
-  form.append('grant_type',    'refresh_token');
-  const res  = await fetch(GOOGLE_TOKEN_URL, { method: 'POST', body: form });
+async function getServiceAccountToken(env) {
+  const email  = env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const rawKey = env.GOOGLE_PRIVATE_KEY;
+  if (!email || !rawKey) throw new Error('Google service account secrets ikke satt (GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY)');
+
+  const now = Math.floor(Date.now() / 1000);
+  const b64url = obj => btoa(JSON.stringify(obj))
+    .replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  const header  = { alg: 'RS256', typ: 'JWT' };
+  const payload = {
+    iss: email,
+    scope: 'https://www.googleapis.com/auth/calendar',
+    aud: GOOGLE_TOKEN_URL,
+    exp: now + 3600,
+    iat: now,
+  };
+  const sigInput = `${b64url(header)}.${b64url(payload)}`;
+
+  // Handle both literal \n (from wrangler secret) and real newlines
+  const pem     = rawKey.replace(/\\n/g, '\n');
+  const keyB64  = pem.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
+  const keyBytes = Uint8Array.from(atob(keyB64), c => c.charCodeAt(0));
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8', keyBytes,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign']
+  );
+  const sig    = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, new TextEncoder().encode(sigInput));
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+
+  const jwt = `${sigInput}.${sigB64}`;
+  const res = await fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+  });
   const data = await res.json();
   if (!data.access_token) throw new Error('Google token feil: ' + JSON.stringify(data));
   return data.access_token;
@@ -332,7 +359,7 @@ function googleRequest(accessToken, method, path, body) {
 
 async function getCalendarEvents(env, from, to) {
   try {
-    const token = await refreshGoogleToken(env);
+    const token = await getServiceAccountToken(env);
     const calId = encodeURIComponent(env.GOOGLE_CALENDAR_ID?.trim() || 'primary');
     const timeMin = encodeURIComponent(from + 'T00:00:00Z');
     const timeMax = encodeURIComponent(to   + 'T23:59:59Z');
@@ -357,7 +384,7 @@ async function createPlanSessions(env, sessions) {
   const capped = sessions.slice(0, 7); // max 7 to stay under subrequest limit
 
   let token;
-  try { token = await refreshGoogleToken(env); } catch (_) { token = null; }
+  try { token = await getServiceAccountToken(env); } catch (_) { token = null; }
 
   const calId = encodeURIComponent(env.GOOGLE_CALENDAR_ID?.trim() || 'primary');
   const notionIds = [], calendarIds = [];

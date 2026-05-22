@@ -220,11 +220,17 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     </div>
   </div>
 
-  <div class="stat-grid" id="idag-countdown-grid">
+  <!-- Race countdowns — populated by updateIdagCountdowns() -->
+  <div class="stat-grid" id="idag-countdown-grid" style="margin-bottom:8px;">
     <div class="stat-card"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:13px">—</div><div class="stat-sub">Laster…</div></div>
     <div class="stat-card"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:13px">—</div><div class="stat-sub">Laster…</div></div>
-    <div class="stat-card"><div class="stat-label">Gjennomført</div><div class="stat-val" id="idag-gjennomfort">—</div><div class="stat-sub">I fase</div></div>
-    <div class="stat-card"><div class="stat-label">Gjenstår</div><div class="stat-val" id="idag-gjenstaar">—</div><div class="stat-sub">I fase</div></div>
+  </div>
+  <!-- Training metrics — populated by updateIdagStats() -->
+  <div class="stat-grid" id="idag-stats-grid">
+    <div class="stat-card"><div class="stat-label">Gjennomført</div><div class="stat-val">—</div><div class="stat-sub">I fase</div></div>
+    <div class="stat-card"><div class="stat-label">Gjenstår</div><div class="stat-val">—</div><div class="stat-sub">I fase</div></div>
+    <div class="stat-card"><div class="stat-label">Belastning</div><div class="stat-val">—</div><div class="stat-sub">Akutt:Kronisk</div></div>
+    <div class="stat-card"><div class="stat-label">Km denne uka</div><div class="stat-val">—</div><div class="stat-sub">løping</div></div>
   </div>
 
   <!-- Fase-prinsipper -->
@@ -274,6 +280,12 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
           <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
           <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
         </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);">
+        <span>Vekt:</span>
+        <input type="number" id="dagbok-vekt" step="0.1" min="40" max="200" placeholder="—" inputmode="decimal"
+          style="width:62px;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);font-family:var(--mono);-webkit-appearance:none;">
+        <span style="color:var(--text3);">kg</span>
       </div>
       <button class="btn btn-accent btn-sm" onclick="logDagbok()" style="flex:1;">Logg</button>
       <span id="dagbok-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
@@ -865,7 +877,9 @@ function renderOkter(){
     const zone=okt.faktiskSnittHR?getZone(okt.faktiskSnittHR):null;
     const zoneTxt=zone?`<span class="zone-pill ${zone.c}">${zone.n}</span>`:'';
     const varighetTxt=okt.varighet?`${okt.varighet} min`:'';
-    const effektTxt=[okt.type,varighetTxt].filter(Boolean).join(' · ');
+    const distTxt=okt.distance?`${okt.distance}km`:'';
+    const paceTxt=okt.pace&&okt.distance?`${okt.pace}/km`:'';
+    const effektTxt=[okt.type,varighetTxt,distTxt,paceTxt].filter(Boolean).join(' · ');
     div.innerHTML=`
       <span class="okt-type ${typeClass}">${okt.sport?okt.sport.split(' ')[0]:(okt.type?.toUpperCase().slice(0,2)||'ØK')}</span>
       <div class="okt-center">
@@ -1011,8 +1025,23 @@ async function runAnalyse(){
   document.getElementById('analyse-save-btn').style.display='none';
 
   const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført');
-  const oktSummary=gjennomfort.slice(0,15).map(o=>`${o.dato||'?'}: ${o.navn} — HR ${o.faktiskSnittHR||'?'}/${o.faktiskMaksHR||'?'}, ${o.varighet||'?'} min, ${o.type}`).join('\n');
-  const context=`Du er treneren til Arnar (33 år, pappaperm, hofte/kne-rehab). Maks HR: 199 bpm.\nSoner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.\n\nSiste gjennomførte økter:\n${oktSummary}\n\nFase 0 restitusjon (mai). Neste: Sommernattsløpet 10k 20. juni. Mål: sub-1:45 Oslo HM 12. sept.\nSvar norsk, konkret, direkte.`;
+  const oktSummary=gjennomfort.slice(0,15).map(o=>`${o.dato||'?'}: ${o.navn} — HR ${o.faktiskSnittHR||'?'}/${o.faktiskMaksHR||'?'}, ${o.varighet||'?'}min${o.distance?' '+o.distance+'km':''} ${o.pace?'@'+o.pace:''}, ${o.type||'?'}${o.smerte!=null?' smerte:'+o.smerte:''}`).join('\n');
+  const acl=computeACL();
+  const weekKm=computeWeeklyKm();
+  const goalsCtx=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=getTodayDate()).sort((a,b)=>a.dato.localeCompare(b.dato)).map(g=>`${g.dato}: ${g.navn}${g.planlagtPuls?' (mål: '+g.planlagtPuls+')':''}`).join('\n');
+  const kontekstFull=treningskontekst||localStorage.getItem('treningskontekst')||'';
+  const prinsipper=localStorage.getItem('fase_prinsipper')||'';
+  const context=`Du er treneren til Arnar. Maks HR: ${MAX_HR} bpm. I dag: ${getTodayDate()}.
+${kontekstFull?'Profil: '+kontekstFull:''}
+${prinsipper?'Fase-prinsipper: '+prinsipper:''}
+${acl!==null?'Akutt:Kronisk belastning: '+acl.toFixed(2):''}
+${weekKm?'Km denne uka: '+weekKm.toFixed(1)+'km':''}
+${goalsCtx?'Kommende løp:\n'+goalsCtx:''}
+
+Siste gjennomførte økter:
+${oktSummary}
+
+Svar norsk, konkret, direkte.`;
 
   try{
     const workerUrl=getWorkerUrl();
@@ -1081,35 +1110,37 @@ function renderIdagView(){
   document.getElementById('idag-dato').textContent=todayDisplay.charAt(0).toUpperCase()+todayDisplay.slice(1);
   document.getElementById('idag-sub').textContent=new Date(today+'T12:00:00').toLocaleDateString('no-NO',{day:'numeric',month:'short',year:'numeric'});
 
-  const fase=todayOkt?.fase||'Fase 0';
-  const faseSub=fase==='Fase 0'?'Aktiv restitusjon':fase==='Fase 1'?'Oppbygging':'—';
+  const fase=todayOkt?.fase||localStorage.getItem('fase_navn')||'Fase 0';
+  const faseSub=fase==='Fase 0'?'Aktiv restitusjon':fase==='Fase 1'?'Oppbygging':'';
   document.getElementById('idag-fase').textContent=fase;
   document.getElementById('idag-fase-sub').textContent=faseSub;
 
-  const allInFase=allOkter.filter(o=>(o.fase||'Fase 0')===fase);
-  const doneInFase=allInFase.filter(o=>o.status==='Gjennomført').length;
-  const todoInFase=allInFase.filter(o=>o.status!=='Gjennomført'&&o.status!=='Hoppet over').length;
-  document.getElementById('idag-gjennomfort').textContent=doneInFase;
-  document.getElementById('idag-gjenstaar').textContent=todoInFase;
+  updateIdagStats();
 
   const dailySection=document.getElementById('idag-daily-section');
+  const aiSec=document.getElementById('idag-ai-section');
+  const aiBox=document.getElementById('idag-ai-text');
+  const aiStatus=document.getElementById('idag-ai-status');
+
   if(todayOkt){
     dailySection.innerHTML=renderIdagOktRow(todayOkt,true);
-    // Vis lagret vurdering hvis den finnes
-    if(todayOkt.vurdering&&todayOkt.vurdering.length>20){
-      const aiSec=document.getElementById('idag-ai-section');
-      const aiBox=document.getElementById('idag-ai-text');
-      const aiStatus=document.getElementById('idag-ai-status');
-      if(aiSec&&!aiBox.textContent){
-        aiSec.style.display='block';
-        aiBox.className='analysis-box';
-        aiBox.textContent=todayOkt.vurdering;
-        aiStatus.textContent='';
+    if(todayOkt.status==='Gjennomført'){
+      // Show saved analysis for completed sessions
+      if(todayOkt.vurdering&&todayOkt.vurdering.length>20){
+        if(aiSec&&!aiBox.textContent){
+          aiSec.style.display='block';
+          aiBox.className='analysis-box';
+          aiBox.textContent=todayOkt.vurdering;
+          aiStatus.textContent='';
+        }
       }
+    }else if(todayOkt.status==='To Do'){
+      // Generate coaching brief for planned session
+      aiBox.textContent='';
+      autoLoadTodayBrief(todayOkt);
     }
   }else{
     dailySection.innerHTML='<div class="empty-state"><div class="icon">✨</div>Ingen økt i dag</div>';
-    const aiSec=document.getElementById('idag-ai-section');
     if(aiSec)aiSec.style.display='none';
   }
 
@@ -1142,6 +1173,7 @@ function renderIdagOktRow(okt,featured=false,isNext=false){
           <div style="flex:1;min-width:0;">
             <div style="font-size:15px;font-weight:600;color:var(--accent2);">${esc(okt.navn)}</div>
             <div style="font-size:11px;color:var(--text2);font-family:var(--mono);margin-top:2px;">${dato}${okt.fase?' · '+okt.fase:''}</div>
+            ${(okt.varighet||okt.distance||okt.planlagtPuls)?`<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:3px;">${[okt.varighet?okt.varighet+'min':'',okt.distance?okt.distance+'km':'',okt.planlagtPuls?'HR: '+okt.planlagtPuls:''].filter(Boolean).join(' · ')}</div>`:''}
           </div>
           <div style="flex-shrink:0;text-align:right;">
             ${!isDone?`<button class="okt-mark-btn" style="margin-bottom:6px;" onclick="markAsComplete('${okt.id}')">✓ Gjennomført</button>`:''}
@@ -1169,6 +1201,209 @@ function renderIdagOktRow(okt,featured=false,isNext=false){
 }
 
 function updateCountdowns(){ updateIdagCountdowns(); }
+
+// ── Training metrics ──────────────────────────────────────────────────────────
+function computeACL(){
+  const now=new Date();
+  const d7=new Date(now);d7.setDate(now.getDate()-7);
+  const d28=new Date(now);d28.setDate(now.getDate()-28);
+  const done=allOkter.filter(o=>o.status==='Gjennomført'&&o.varighet&&o.type!=='Dagbok'&&o.type!=='Mål'&&o.dato);
+  const acute=done.filter(o=>new Date(o.dato+'T12:00:00')>=d7).reduce((s,o)=>s+o.varighet,0);
+  const chronic28=done.filter(o=>new Date(o.dato+'T12:00:00')>=d28).reduce((s,o)=>s+o.varighet,0);
+  const chronic=chronic28/4;
+  if(!chronic)return null;
+  return Math.round(acute/chronic*100)/100;
+}
+
+function computeWeeklyKm(){
+  const now=new Date();
+  // Week starts Monday
+  const dayOfWeek=now.getDay()===0?6:now.getDay()-1;
+  const monday=new Date(now);monday.setDate(now.getDate()-dayOfWeek);monday.setHours(0,0,0,0);
+  return allOkter
+    .filter(o=>o.status==='Gjennomført'&&o.distance&&new Date(o.dato+'T12:00:00')>=monday&&o.type!=='Dagbok')
+    .reduce((s,o)=>s+o.distance,0);
+}
+
+function updateIdagStats(){
+  const fase=localStorage.getItem('fase_navn')||'Fase 0';
+  const allInFase=allOkter.filter(o=>(o.fase||'Fase 0')===fase&&o.type!=='Dagbok'&&o.type!=='Mål');
+  const doneInFase=allInFase.filter(o=>o.status==='Gjennomført').length;
+  const todoInFase=allInFase.filter(o=>o.status==='To Do').length;
+  const acl=computeACL();
+  const weekKm=computeWeeklyKm();
+  let aclColor='var(--text2)',aclNote='';
+  if(acl!==null){
+    if(acl<0.8){aclColor='var(--info)';aclNote='undertrent';}
+    else if(acl<1.3){aclColor='var(--accent)';aclNote='optimal';}
+    else if(acl<1.5){aclColor='var(--warn)';aclNote='høy';}
+    else{aclColor='var(--danger)';aclNote='OBS!';}
+  }
+  const el=document.getElementById('idag-stats-grid');
+  if(!el)return;
+  el.innerHTML=`
+    <div class="stat-card"><div class="stat-label">Gjennomført</div><div class="stat-val">${doneInFase}</div><div class="stat-sub">I fase</div></div>
+    <div class="stat-card"><div class="stat-label">Gjenstår</div><div class="stat-val">${todoInFase}</div><div class="stat-sub">I fase</div></div>
+    <div class="stat-card"><div class="stat-label">Belastning</div><div class="stat-val" style="color:${aclColor};font-size:${acl?'17px':'20px'}">${acl!==null?acl.toFixed(2):'—'}</div><div class="stat-sub">${aclNote||'Akutt:Kronisk'}</div></div>
+    <div class="stat-card"><div class="stat-label">Km denne uka</div><div class="stat-val" style="font-size:${weekKm>99?'15px':'20px'}">${weekKm?weekKm.toFixed(1):'—'}</div><div class="stat-sub">løping</div></div>
+  `;
+}
+
+// ── Silent auto-sync ──────────────────────────────────────────────────────────
+async function silentSyncStrava(){
+  const url=getWorkerUrl();if(!url)return;
+  try{
+    const r=await fetch(url+'/api/sync',{method:'POST'});
+    const d=await r.json();
+    if(r.ok&&(d.created>0||d.synced>0)){
+      await fetchOkter();
+      checkForFeedbackNeeded();
+    }
+  }catch(e){} // silent
+}
+
+// ── Post-session feedback ─────────────────────────────────────────────────────
+let _fbStarSelected=0;
+
+function checkForFeedbackNeeded(){
+  if(sessionStorage.getItem('feedback_dismissed'))return;
+  const cutoff=new Date();cutoff.setHours(cutoff.getHours()-48);
+  const cutoffStr=cutoff.toISOString().split('T')[0];
+  const needsFeedback=allOkter.filter(o=>
+    o.status==='Gjennomført'&&o.dato>=cutoffStr&&!o.vurdering&&o.smerte==null&&
+    o.type!=='Dagbok'&&o.type!=='Mål'&&
+    !o.navn?.startsWith('Fase-')&&!o.navn?.startsWith('Treningskontekst')&&!o.navn?.startsWith('Treningsplan')
+  );
+  if(needsFeedback.length)showFeedbackCard(needsFeedback[0]);
+  else hideFeedbackCard();
+}
+
+function showFeedbackCard(okt){
+  hideFeedbackCard();
+  const card=document.createElement('div');
+  card.id='feedback-card';
+  card.style.cssText='background:var(--bg2);border:0.5px solid rgba(200,240,96,0.35);border-radius:var(--rlg);padding:14px 16px;margin-bottom:14px;';
+  card.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="font-size:10px;color:var(--accent);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;">Tilbakemelding</div>
+      <button onclick="dismissFeedbackCard()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;">✕</button>
+    </div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Hvordan gikk <span style="color:var(--accent2);">${esc(okt.navn)}</span>?</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+      <span style="font-size:11px;color:var(--text2);">Følelse:</span>
+      <div style="display:flex;gap:2px;" id="fb-stars">
+        ${[1,2,3,4,5].map(n=>`<button onclick="selectFbStar(${n})" data-n="${n}" class="fb-star" style="font-size:20px;background:none;border:none;cursor:pointer;opacity:0.3;transition:opacity .1s;padding:2px;">⭐</button>`).join('')}
+      </div>
+      <select id="fb-smerte" style="background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);font-family:var(--mono);">
+        <option value="">Smerte: —</option>
+        ${[0,1,2,3,4,5,6,7,8,9,10].map(n=>`<option>${n}</option>`).join('')}
+      </select>
+    </div>
+    <textarea id="fb-note" placeholder="Kort notat (valgfritt)…" rows="2"
+      style="width:100%;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:7px;padding:8px 10px;font-size:12px;color:var(--text);font-family:var(--sans);resize:none;margin-bottom:8px;"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-accent btn-sm" onclick="submitFeedback('${okt.id}')" style="flex:1;">Logg tilbakemelding</button>
+      <span id="fb-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+    </div>`;
+  // Insert after countdown grids, before fase-prinsipper
+  const statsGrid=document.getElementById('idag-stats-grid');
+  if(statsGrid)statsGrid.insertAdjacentElement('afterend',card);
+  window._feedbackOktId=okt.id;
+}
+
+function hideFeedbackCard(){
+  const c=document.getElementById('feedback-card');if(c)c.remove();
+}
+
+function dismissFeedbackCard(){
+  sessionStorage.setItem('feedback_dismissed','1');
+  hideFeedbackCard();
+}
+
+function selectFbStar(n){
+  _fbStarSelected=n;
+  document.querySelectorAll('.fb-star').forEach(btn=>{
+    btn.style.opacity=parseInt(btn.dataset.n)<=n?'1':'0.3';
+  });
+}
+
+async function submitFeedback(oktId){
+  const url=getWorkerUrl();if(!url)return;
+  const smerteVal=document.getElementById('fb-smerte')?.value;
+  const smerte=smerteVal&&smerteVal!==''&&!isNaN(smerteVal)?parseInt(smerteVal):null;
+  const note=(document.getElementById('fb-note')?.value||'').trim();
+  const feelings=['','Veldig tungt 😓','Tungt','OK 👍','Bra 💪','Fantastisk! 🔥'];
+  const feelingTxt=_fbStarSelected?feelings[_fbStarSelected]:'';
+  const vurdering=[feelingTxt?`Følelse: ${feelingTxt}`:'',note].filter(Boolean).join('\n');
+  const statusEl=document.getElementById('fb-status');
+  if(!vurdering&&smerte==null){statusEl.textContent='⚠ Legg til notat';return;}
+  statusEl.textContent='Lagrer…';
+  try{
+    const body={};
+    if(vurdering)body.vurdering=vurdering;
+    if(smerte!=null)body.smerte=smerte;
+    const r=await fetch(`${url}/api/okter/${oktId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.ok){
+      const okt=allOkter.find(o=>o.id===oktId);
+      if(okt){if(vurdering)okt.vurdering=vurdering;if(smerte!=null)okt.smerte=smerte;}
+      statusEl.textContent='✓';statusEl.style.color='var(--accent)';
+      _fbStarSelected=0;
+      setTimeout(()=>dismissFeedbackCard(),700);
+    }else{statusEl.textContent='✗ Feil';statusEl.style.color='var(--danger)';}
+  }catch(e){statusEl.textContent='✗ '+e.message;statusEl.style.color='var(--danger)';}
+}
+
+// ── Today's session brief ─────────────────────────────────────────────────────
+async function autoLoadTodayBrief(okt){
+  const url=getWorkerUrl();if(!url)return;
+  if(!okt||okt.status!=='To Do')return;
+  const aiSec=document.getElementById('idag-ai-section');
+  const aiBox=document.getElementById('idag-ai-text');
+  const aiStatus=document.getElementById('idag-ai-status');
+  if(!aiSec)return;
+  aiSec.style.display='block';
+  aiStatus.textContent='Forbereder…';
+  aiBox.className='analysis-box loading';
+  aiBox.textContent='Forbereder coaching-brief…';
+
+  const recent=allOkter
+    .filter(o=>o.status==='Gjennomført'&&o.dato&&o.varighet&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .slice(0,5)
+    .map(o=>`${o.dato}: ${o.sport||o.type} — HR ${o.faktiskSnittHR||'?'}, ${o.varighet}min${o.distance?' ('+o.distance+'km)':''}${o.smerte!=null?', smerte:'+o.smerte:''}`)
+    .join('\n');
+  const acl=computeACL();
+  const recentDagbok=allOkter
+    .filter(o=>o.type==='Dagbok')
+    .sort((a,b)=>b.dato.localeCompare(a.dato))
+    .slice(0,3)
+    .map(o=>`${o.dato}: ${o.vurdering||o.navn}${o.smerte!=null?' (smerte:'+o.smerte+')':''}`)
+    .join('\n');
+  const prinsipper=planPrinsipper||localStorage.getItem('fase_prinsipper')||'';
+
+  const prompt=`Du er treneren til Arnar. Skriv en økt-brief på norsk (3–4 setninger) for dagens planlagte økt.
+
+Dagens økt: ${okt.navn}
+Type: ${okt.type||'—'} | Varighet: ${okt.varighet||'?'}min | Mål-HR: ${okt.planlagtPuls||'—'}
+${okt.vurdering?'Beskrivelse: '+okt.vurdering:''}
+
+${acl!==null?`Akutt:Kronisk belastning: ${acl.toFixed(2)} (${acl<0.8?'undertrent':acl<1.3?'optimal':acl<1.5?'noe høy':'OBS: for høy!'})`:''}
+
+Siste 5 gjennomførte:
+${recent||'(ingen enda)'}
+
+${recentDagbok?'Helse/dagbok:\n'+recentDagbok:''}
+${prinsipper?'\nFase-prinsipper:\n'+prinsipper:''}
+
+Skriv BARE brief-teksten — ingen overskrift, ingen intro. Konkret, motiverende, direkte på norsk.`;
+
+  try{
+    const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    const d=await r.json();
+    aiBox.className='analysis-box';
+    aiBox.textContent=d.text||'Ingen respons.';
+    aiStatus.textContent='📋 Økt-brief';
+  }catch(e){aiSec.style.display='none';}
+}
 
 async function markAsComplete(oktId){
   const okt=allOkter.find(o=>o.id===oktId);
@@ -1307,18 +1542,22 @@ async function logDagbok(){
   if(!tekst)return;
   const smerteVal=document.getElementById('dagbok-smerte').value;
   const smerte=smerteVal!==''?parseInt(smerteVal):null;
+  const vektVal=document.getElementById('dagbok-vekt')?.value;
+  const vekt=vektVal?parseFloat(vektVal):null;
   const statusEl=document.getElementById('dagbok-status');
   statusEl.textContent='Lagrer…';
   const today=getTodayDate();
-  const navn=`${dagbokCat.icon} ${dagbokCat.cat}: ${tekst.slice(0,40)}${tekst.length>40?'…':''}`;
+  const vektSuffix=vekt?` · ${vekt}kg`:'';
+  const navn=`${dagbokCat.icon} ${dagbokCat.cat}: ${tekst.slice(0,40)}${tekst.length>40?'…':''}${vektSuffix}`;
   try{
     const r=await fetch(url+'/api/dagbok',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({navn,dato:today,vurdering:tekst,smerte:smerte!==null?smerte:undefined,icon:dagbokCat.icon})});
+      body:JSON.stringify({navn,dato:today,vurdering:tekst,smerte:smerte!==null?smerte:undefined,vekt:vekt!==null?vekt:undefined,icon:dagbokCat.icon})});
     const d=await r.json();
     if(r.ok){
       statusEl.textContent='✓ Logget';statusEl.style.color='var(--accent)';
       document.getElementById('dagbok-tekst').value='';
       document.getElementById('dagbok-smerte').value='';
+      const vektEl=document.getElementById('dagbok-vekt');if(vektEl)vektEl.value='';
       await fetchOkter();
       setTimeout(()=>{document.getElementById('dagbok-form').style.display='none';statusEl.textContent='';},1200);
     }else{statusEl.textContent='✗ '+(d.error||r.status);statusEl.style.color='var(--danger)';}
@@ -1331,10 +1570,11 @@ function renderDagbok(){
   if(!allDagbok.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:4px 0;">Ingen logger ennå</div>';return;}
   el.innerHTML=allDagbok.map(e=>{
     const smerteTag=e.smerte!=null?`<span style="font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:3px;background:rgba(255,107,107,0.12);color:var(--danger);margin-left:4px;">Smerte ${e.smerte}</span>`:'';
+    const vektTag=e.vekt!=null?`<span style="font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:3px;background:rgba(96,180,255,0.1);color:var(--info);margin-left:4px;">⚖ ${e.vekt}kg</span>`:'';
     return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;line-height:1.5;">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap;">
         <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">${formatDato(e.dato)}</span>
-        ${smerteTag}
+        ${smerteTag}${vektTag}
       </div>
       <div style="color:var(--text2);">${esc(e.vurdering||e.navn)}</div>
     </div>`;
@@ -1489,14 +1729,14 @@ async function markGoalDone(id){
 }
 
 function updateIdagCountdowns(){
-  // Dynamic countdowns from allGoals, sorted by date
   const today=getTodayDate();
   const upcoming=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=today).sort((a,b)=>a.dato.localeCompare(b.dato));
-
-  // Update countdown cards (up to 2 shown in I dag)
   const countdownGrid=document.getElementById('idag-countdown-grid');
   if(!countdownGrid)return;
-  if(!upcoming.length){countdownGrid.innerHTML='<div class="stat-card" style="grid-column:1/-1;"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:13px">—</div><div class="stat-sub">Ingen planlagte løp</div></div>';return;}
+  if(!upcoming.length){
+    countdownGrid.innerHTML='<div class="stat-card" style="grid-column:1/-1;"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:13px">—</div><div class="stat-sub">Ingen planlagte løp</div></div>';
+    return;
+  }
   countdownGrid.innerHTML=upcoming.slice(0,2).map(g=>{
     const days=daysUntil(g.dato);
     const daysTxt=days===0?'I dag!':(days>0?`${days} dager`:'Passert');
@@ -1813,7 +2053,15 @@ loadProfilFields();
 loadPrinsipper();
 loadKontekst();
 renderZones();
-fetchOkter().then(()=>fetchGoals());
+fetchOkter()
+  .then(()=>{
+    checkForFeedbackNeeded();
+    return fetchGoals();
+  })
+  .then(()=>{
+    // Silent background sync — refreshes data if Strava has new activities
+    setTimeout(()=>silentSyncStrava(),2000);
+  });
 </script>
 </body>
 </html>

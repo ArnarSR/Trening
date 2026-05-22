@@ -147,6 +147,7 @@ export default {
         };
         if (body.vurdering) props['Vurdering'] = { rich_text: [{ text: { content: body.vurdering } }] };
         if (body.smerte != null) props['Smerte 0-10'] = { number: body.smerte };
+        if (body.vekt != null)   props['Vekt (kg)']   = { number: body.vekt };
         const createBody = { parent: { database_id: DB_ID }, properties: props, icon: { type: 'emoji', emoji: body.icon || '📝' } };
         const res  = await notionRequest(env, 'POST', '/pages', createBody);
         const data = await res.json();
@@ -236,9 +237,13 @@ async function syncStrava(env) {
 
   // Query Notion for all pages since oldest activity date
   const notionPages = await queryNotionSince(env, oldest);
-  // Date → first matching page
+
+  // Build both stravaId map (primary) and date map (fallback for manually-created pages)
+  const stravaMap = {};
   const dateMap = {};
   for (const page of notionPages) {
+    const sid = page.properties['Strava ID']?.rich_text?.[0]?.plain_text;
+    if (sid && !stravaMap[sid]) stravaMap[sid] = page;
     const dato = page.properties['Dato']?.date?.start;
     if (dato && !dateMap[dato]) dateMap[dato] = page;
   }
@@ -251,42 +256,56 @@ async function syncStrava(env) {
     const date = activity.start_date_local?.split('T')[0];
     if (!date) continue;
 
+    const stravaId = String(activity.id);
     const sportKey = (activity.sport_type || activity.type || '').toLowerCase();
     const sport = SPORT_MAP[sportKey];
     const avgHR = activity.average_heartrate ? Math.round(activity.average_heartrate) : null;
     const maxHR = activity.max_heartrate ? Math.round(activity.max_heartrate) : null;
     const duration = activity.elapsed_time ? Math.round(activity.elapsed_time / 60) : null;
+    const distance = activity.distance ? Math.round(activity.distance / 100) / 10 : null; // km, 1 decimal
     const pace = activity.average_speed > 0 ? formatPace(activity.average_speed) : null;
     const name = activity.name || 'Strava-økt';
 
-    if (dateMap[date]) {
-      const pageId = dateMap[date].id;
+    // Match by Strava ID first (exact dedup), fall back to date (catches manually-created sessions)
+    const existing = stravaMap[stravaId] || dateMap[date];
+
+    if (existing) {
+      const pageId = existing.id;
       const props = {};
-      if (avgHR !== null) props['Faktisk snitt HR'] = { number: avgHR };
-      if (maxHR !== null) props['Faktisk maks HR'] = { number: maxHR };
-      if (duration !== null) props['Varighet (min)'] = { number: duration };
-      if (pace) props['Pace'] = { rich_text: [{ text: { content: pace } }] };
-      if (sport) props['Sport'] = { select: { name: sport.type } };
+      if (avgHR !== null)    props['Faktisk snitt HR'] = { number: avgHR };
+      if (maxHR !== null)    props['Faktisk maks HR']  = { number: maxHR };
+      if (duration !== null) props['Varighet (min)']   = { number: duration };
+      if (distance !== null) props['Distanse (km)']    = { number: distance };
+      if (pace)              props['Pace']              = { rich_text: [{ text: { content: pace } }] };
+      if (sport)             props['Sport']             = { select: { name: sport.type } };
+      props['Strava ID'] = { rich_text: [{ text: { content: stravaId } }] };
 
       const patchBody = { properties: props };
       if (sport) patchBody.icon = { type: 'emoji', emoji: sport.icon };
       await notionRequest(env, 'PATCH', `/pages/${pageId}`, patchBody);
+      // Register by stravaId so two-a-days don't collide via dateMap
+      stravaMap[stravaId] = existing;
+      delete dateMap[date]; // prevent a two-a-day from date-matching the same page
       synced++;
     } else {
       const props = {
-        'Navn': { title: [{ text: { content: name } }] },
-        'Dato': { date: { start: date } },
+        'Navn':      { title: [{ text: { content: name } }] },
+        'Dato':      { date: { start: date } },
+        'Status':    { select: { name: 'Gjennomført' } },
+        'Strava ID': { rich_text: [{ text: { content: stravaId } }] },
       };
-      if (avgHR !== null) props['Faktisk snitt HR'] = { number: avgHR };
-      if (maxHR !== null) props['Faktisk maks HR'] = { number: maxHR };
-      if (duration !== null) props['Varighet (min)'] = { number: duration };
-      if (pace) props['Pace'] = { rich_text: [{ text: { content: pace } }] };
-      if (sport) props['Sport'] = { select: { name: sport.type } };
+      if (avgHR !== null)    props['Faktisk snitt HR'] = { number: avgHR };
+      if (maxHR !== null)    props['Faktisk maks HR']  = { number: maxHR };
+      if (duration !== null) props['Varighet (min)']   = { number: duration };
+      if (distance !== null) props['Distanse (km)']    = { number: distance };
+      if (pace)              props['Pace']              = { rich_text: [{ text: { content: pace } }] };
+      if (sport)             props['Sport']             = { select: { name: sport.type } };
 
       const createBody = { parent: { database_id: DB_ID }, properties: props };
       if (sport) createBody.icon = { type: 'emoji', emoji: sport.icon };
-      await notionRequest(env, 'POST', '/pages', createBody);
-      dateMap[date] = { id: 'new' };
+      const newPage = await notionRequest(env, 'POST', '/pages', createBody);
+      const newData = await newPage.json();
+      stravaMap[stravaId] = { id: newData.id || 'new' };
       created++;
     }
   }
@@ -573,10 +592,13 @@ function mapPage(page) {
     faktiskSnittHR: p['Faktisk snitt HR']?.number || null,
     faktiskMaksHR: p['Faktisk maks HR']?.number || null,
     varighet: p['Varighet (min)']?.number || null,
+    distance: p['Distanse (km)']?.number || null,
     pace: p['Pace']?.rich_text?.[0]?.plain_text || '',
     smerte: p['Smerte 0-10']?.number ?? null,
+    vekt: p['Vekt (kg)']?.number || null,
     medVogn: p['Med vogn']?.checkbox || false,
     vurdering: p['Vurdering']?.rich_text?.[0]?.plain_text || '',
+    stravaId: p['Strava ID']?.rich_text?.[0]?.plain_text || '',
     url: page.url,
   };
 }
@@ -602,6 +624,8 @@ function buildNotionProps(body) {
     props['Varighet (min)'] = { number: body.varighet };
   if (body.smerte != null)
     props['Smerte 0-10'] = { number: body.smerte };
+  if (body.vekt != null)
+    props['Vekt (kg)'] = { number: body.vekt };
   if (body.medVogn !== undefined)
     props['Med vogn'] = { checkbox: body.medVogn };
   return props;

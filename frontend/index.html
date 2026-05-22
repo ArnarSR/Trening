@@ -162,6 +162,18 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 .plan-preview-date{font-family:var(--mono);font-size:11px;color:var(--text2);width:60px;flex-shrink:0;}
 .plan-preview-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .plan-preview-meta{font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0;}
+.race-card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px;}
+.race-card.next{border-color:rgba(200,240,96,0.4);background:linear-gradient(135deg,rgba(200,240,96,0.07) 0%,rgba(200,240,96,0.02) 100%);}
+.race-card.done{opacity:.6;}
+.race-countdown{font-size:24px;font-weight:700;font-family:var(--mono);color:var(--accent);line-height:1;min-width:52px;text-align:center;}
+.race-countdown-sub{font-size:9px;color:var(--text3);text-align:center;font-family:var(--mono);margin-top:2px;}
+.race-info{flex:1;min-width:0;}
+.race-name{font-size:14px;font-weight:600;margin-bottom:3px;}
+.race-meta{font-size:11px;color:var(--text2);font-family:var(--mono);}
+.race-target{display:inline-block;font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:4px;background:rgba(200,240,96,0.1);color:var(--accent);margin-top:5px;}
+.race-result{display:inline-block;font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:4px;background:rgba(139,255,200,0.1);color:var(--accent2);margin-top:5px;}
+.priority-a{color:var(--danger);}.priority-b{color:var(--warn);}.priority-c{color:var(--text3);}
+.add-goal-form{background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:var(--rlg);padding:16px;margin-bottom:14px;}
 </style>
 </head>
 <body>
@@ -176,6 +188,7 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   <div class="nav-section">
     <div class="nav-label">Oversikt</div>
     <button class="nav-item active" onclick="showView('idag')"><span class="nav-dot dot-green"></span>I dag</button>
+    <button class="nav-item" onclick="showView('maal')"><span class="nav-dot" style="background:#ff9f43;"></span>Mål</button>
     <button class="nav-item" onclick="showView('okter')"><span class="nav-dot dot-green"></span>Øktlogg</button>
     <button class="nav-item" onclick="showView('analyse')"><span class="nav-dot dot-blue"></span>Analyse</button>
     <button class="nav-item" onclick="showView('plan')"><span class="nav-dot dot-blue"></span>Treningsplan</button>
@@ -207,9 +220,9 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     </div>
   </div>
 
-  <div class="stat-grid">
-    <div class="stat-card"><div class="stat-label">Sommernatt</div><div class="stat-val" style="font-size:13px" id="countdown-sommernatt">—</div><div class="stat-sub">20. juni</div></div>
-    <div class="stat-card"><div class="stat-label">Oslo HM</div><div class="stat-val" style="font-size:13px" id="countdown-hm">—</div><div class="stat-sub">12. sept</div></div>
+  <div class="stat-grid" id="idag-countdown-grid">
+    <div class="stat-card"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:13px">—</div><div class="stat-sub">Laster…</div></div>
+    <div class="stat-card"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:13px">—</div><div class="stat-sub">Laster…</div></div>
     <div class="stat-card"><div class="stat-label">Gjennomført</div><div class="stat-val" id="idag-gjennomfort">—</div><div class="stat-sub">I fase</div></div>
     <div class="stat-card"><div class="stat-label">Gjenstår</div><div class="stat-val" id="idag-gjenstaar">—</div><div class="stat-sub">I fase</div></div>
   </div>
@@ -364,6 +377,50 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   </div>
 </div>
 
+<!-- ══ MÅL ══ -->
+<div id="view-maal" class="view">
+  <div class="page-header"><div class="page-title">Mål</div><div class="page-sub">Løp, ambisjoner og langsiktig retning</div></div>
+
+  <div class="sec-head">
+    <div class="sec-title">Kommende løp</div>
+    <button class="btn btn-sm btn-accent" onclick="toggleAddGoal()">+ Legg til</button>
+  </div>
+
+  <div class="add-goal-form" id="add-goal-form" style="display:none;">
+    <div class="form-grid">
+      <div class="form-field full"><label class="form-label">Løpsnavn</label>
+        <input type="text" class="form-input" id="g-navn" placeholder="Oslo Halvmaraton 2026"></div>
+      <div class="form-field"><label class="form-label">Dato</label>
+        <input type="date" class="form-input" id="g-dato"></div>
+      <div class="form-field"><label class="form-label">Distanse</label>
+        <select class="form-input" id="g-distanse">
+          <option>5k</option><option>10k</option><option selected>Halvmaraton</option>
+          <option>Maraton</option><option>Terrengløp</option><option>Annet</option>
+        </select></div>
+      <div class="form-field"><label class="form-label">Mål-tid</label>
+        <input type="text" class="form-input" id="g-maal-tid" placeholder="sub-1:45"></div>
+      <div class="form-field"><label class="form-label">Prioritet</label>
+        <select class="form-input" id="g-prioritet">
+          <option value="A">A — Hovedmål</option>
+          <option value="B" selected>B — Viktig</option>
+          <option value="C">C — Treningsløp</option>
+        </select></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="btn btn-accent" onclick="addGoal()" style="flex:1;">Lagre</button>
+      <button class="btn" onclick="toggleAddGoal()">Avbryt</button>
+    </div>
+    <div id="add-goal-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);margin-top:8px;"></div>
+  </div>
+
+  <div id="goals-upcoming"></div>
+
+  <div class="sec-head" style="margin-top:20px;">
+    <div class="sec-title">Gjennomført</div>
+  </div>
+  <div id="goals-past"><div class="empty-state" style="padding:20px;"><div class="icon" style="font-size:20px;">🏅</div>Ingen gjennomførte løp ennå</div></div>
+</div>
+
 <!-- ══ INNSTILLINGER ══ -->
 <div id="view-innstillinger" class="view">
   <div class="page-header"><div class="page-title">Innstillinger</div></div>
@@ -397,6 +454,17 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="btn btn-sm btn-accent" id="prinsipper-save-btn" onclick="savePrinsipperToNotion()">Lagre til Notion</button>
         <span id="prinsipper-save-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
+    <div class="settings-title">Treningskontekst</div>
+    <div class="settings-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Permanent profil som alltid sendes til Claude. Inkluder alder, maks HR, skadehistorikk, treningsbakgrunn og langsiktige ambisjoner.</div>
+      <textarea class="setting-input" id="s-kontekst" rows="8" style="resize:vertical;min-height:160px;font-family:var(--sans);font-size:12px;line-height:1.6;width:100%;" oninput="onKontekstInput()" placeholder="Alder: 33 år&#10;Maks HR: 199 bpm&#10;Skader/rehab: Hofte og kne (2026)&#10;Treningsbakgrunn: ...&#10;&#10;Langsiktige ambisjoner:&#10;• Sub-1:45 halvmaraton&#10;• ..."></textarea>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+        <button class="btn btn-sm btn-accent" id="kontekst-save-btn" onclick="saveKontekstToNotion()">Lagre til Notion</button>
+        <span id="kontekst-save-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
       </div>
     </div>
   </div>
@@ -466,8 +534,8 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 
 <nav class="bottom-nav">
   <button class="bn-item active" id="bn-idag" onclick="showView('idag')"><span class="bn-icon">📅</span><span>I dag</span></button>
+  <button class="bn-item" id="bn-maal" onclick="showView('maal')"><span class="bn-icon">🎯</span><span>Mål</span></button>
   <button class="bn-item" id="bn-okter" onclick="showView('okter')"><span class="bn-icon">📋</span><span>Økter</span></button>
-  <button class="bn-item" id="bn-analyse" onclick="showView('analyse')"><span class="bn-icon">📊</span><span>Analyse</span></button>
   <button class="bn-item" id="bn-plan" onclick="showView('plan')"><span class="bn-icon">📝</span><span>Plan</span></button>
   <button class="bn-item" id="bn-innstillinger" onclick="showView('innstillinger')"><span class="bn-icon">⚙️</span><span>Innst.</span></button>
 </nav>
@@ -489,6 +557,8 @@ let lastAnalysis = '';
 let lastAnalysisTitle = '';
 let planHistory = [];
 let lastPlanResponse = '';
+let allGoals = [];
+let treningskontekst = '';
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 function getWorkerUrl(){try{return localStorage.getItem('worker_url')||'';}catch(e){return '';}}
@@ -699,6 +769,7 @@ function showView(name){
   const bi=document.getElementById('bn-'+name);if(bi)bi.classList.add('active');
   document.querySelector('.main').scrollTo(0,0);
   if(name==='plan')loadPlanContext();
+  if(name==='maal')fetchGoals();
 }
 
 // ── Fetch økter ───────────────────────────────────────────────────────────────
@@ -1039,18 +1110,7 @@ function renderIdagOktRow(okt,featured=false,isNext=false){
     </div>`;
 }
 
-function updateCountdowns(){
-  const today=new Date();
-  today.setHours(0,0,0,0);
-
-  const sommernatt=new Date(2026,5,20);
-  const daysSommernatt=Math.ceil((sommernatt-today)/(1000*60*60*24));
-  document.getElementById('countdown-sommernatt').textContent=daysSommernatt>0?daysSommernatt+' dager':(daysSommernatt===0?'I dag!':'✓ Gjort');
-
-  const hm=new Date(2026,8,12);
-  const daysHm=Math.ceil((hm-today)/(1000*60*60*24));
-  document.getElementById('countdown-hm').textContent=daysHm>0?daysHm+' dager':(daysHm===0?'I dag!':'✓ Gjort');
-}
+function updateCountdowns(){ updateIdagCountdowns(); }
 
 async function markAsComplete(oktId){
   const okt=allOkter.find(o=>o.id===oktId);
@@ -1062,6 +1122,174 @@ async function markAsComplete(oktId){
     if(r.ok){okt.status='Gjennomført';renderIdagView();}
     else{alert('Klarte ikke oppdatere status');}
   }catch(e){alert('Feil: '+e.message);}
+}
+
+// ── Treningskontekst ──────────────────────────────────────────────────────────
+function onKontekstInput(){
+  try{localStorage.setItem('treningskontekst',document.getElementById('s-kontekst').value);}catch(e){}
+  treningskontekst=document.getElementById('s-kontekst').value;
+  document.getElementById('kontekst-save-status').textContent='';
+}
+
+async function saveKontekstToNotion(){
+  const url=getWorkerUrl();
+  const btn=document.getElementById('kontekst-save-btn');
+  const status=document.getElementById('kontekst-save-status');
+  const tekst=document.getElementById('s-kontekst').value;
+  try{localStorage.setItem('treningskontekst',tekst);}catch(e){}
+  treningskontekst=tekst;
+  if(!url){status.textContent='⚠ Sett Worker URL';status.style.color='var(--warn)';return;}
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
+  try{
+    const r=await fetch(url+'/api/kontekst',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tekst})});
+    if(r.ok){status.textContent='✓ Lagret til Notion';status.style.color='var(--accent)';}
+    else{const e=await r.json();status.textContent='✗ '+(e.error||r.status);status.style.color='var(--danger)';}
+  }catch(e){status.textContent='✗ '+e.message;status.style.color='var(--danger)';}
+  btn.disabled=false;btn.textContent='Lagre til Notion';
+}
+
+async function loadKontekst(){
+  // Load from localStorage first (instant)
+  const cached=localStorage.getItem('treningskontekst')||'';
+  treningskontekst=cached;
+  try{document.getElementById('s-kontekst').value=cached;}catch(e){}
+  // Then sync from Notion
+  const url=getWorkerUrl();if(!url)return;
+  try{
+    const r=await fetch(url+'/api/kontekst');
+    const d=await r.json();
+    if(r.ok&&d.tekst){
+      treningskontekst=d.tekst;
+      localStorage.setItem('treningskontekst',d.tekst);
+      try{document.getElementById('s-kontekst').value=d.tekst;}catch(e){}
+    }
+  }catch(e){}
+}
+
+// ── Goals / Mål ───────────────────────────────────────────────────────────────
+async function fetchGoals(){
+  const url=getWorkerUrl();if(!url)return;
+  try{
+    const r=await fetch(url+'/api/goals');
+    const d=await r.json();
+    if(r.ok)allGoals=d.goals||[];
+  }catch(e){}
+  renderGoals();
+  updateIdagCountdowns();
+}
+
+function daysUntil(dateStr){
+  const today=new Date();today.setHours(0,0,0,0);
+  const target=new Date(dateStr+'T12:00:00');
+  return Math.ceil((target-today)/(1000*60*60*24));
+}
+
+function parsePriority(vurdering){
+  const m=(vurdering||'').match(/Prioritet:\s*([ABC])/i);
+  return m?m[1].toUpperCase():'B';
+}
+
+function renderGoals(){
+  const today=getTodayDate();
+  const upcoming=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=today).sort((a,b)=>a.dato.localeCompare(b.dato));
+  const past=allGoals.filter(g=>g.status==='Gjennomført'||g.dato<today).sort((a,b)=>b.dato.localeCompare(a.dato));
+
+  const upEl=document.getElementById('goals-upcoming');
+  if(!upEl)return;
+  if(!upcoming.length){
+    upEl.innerHTML='<div class="empty-state" style="padding:24px;"><div class="icon" style="font-size:24px;">🏁</div>Ingen kommende løp. Legg til ditt første mål!</div>';
+  }else{
+    upEl.innerHTML=upcoming.map((g,i)=>renderRaceCard(g,i===0)).join('');
+  }
+
+  const pastEl=document.getElementById('goals-past');
+  if(pastEl){
+    pastEl.innerHTML=past.length?past.map(g=>renderRaceCard(g,false,true)).join(''):'<div class="empty-state" style="padding:20px;"><div class="icon" style="font-size:20px;">🏅</div>Ingen gjennomførte løp ennå</div>';
+  }
+}
+
+function renderRaceCard(g,isNext=false,isDone=false){
+  const days=daysUntil(g.dato);
+  const priority=parsePriority(g.vurdering);
+  const prioClass=`priority-${priority.toLowerCase()}`;
+  const dato=formatDato(g.dato);
+  const countdownTxt=isDone?'✓':(days===0?'I dag!':(days>0?days:'Passert'));
+  const countdownSub=isDone?'Gjennomført':(days>0?'dager':'');
+
+  return`<div class="race-card${isNext?' next':''}${isDone?' done':''}">
+    <div>
+      <div class="race-countdown">${countdownTxt}</div>
+      ${countdownSub?`<div class="race-countdown-sub">${countdownSub}</div>`:''}
+    </div>
+    <div class="race-info">
+      <div class="race-name">${esc(g.navn)}</div>
+      <div class="race-meta">${dato}${g.vurdering?.match(/Distanse:\s*([^\n]+)/)?` · ${g.vurdering.match(/Distanse:\s*([^\n]+)/)[1]}`:''} · <span class="${prioClass}">Prioritet ${priority}</span></div>
+      ${g.planlagtPuls?`<div><span class="${isDone?'race-result':'race-target'}">${isDone?'Resultat: ':'Mål: '}${esc(g.planlagtPuls)}</span></div>`:''}
+    </div>
+    ${!isDone?`<button class="btn btn-sm" onclick="markGoalDone('${g.id}')" style="flex-shrink:0;">✓ Ferdig</button>`:''}
+  </div>`;
+}
+
+function toggleAddGoal(){
+  const form=document.getElementById('add-goal-form');
+  form.style.display=form.style.display==='none'?'block':'none';
+  if(form.style.display==='block')document.getElementById('g-navn').focus();
+}
+
+async function addGoal(){
+  const url=getWorkerUrl();
+  if(!url){alert('Sett Worker URL under Innstillinger');return;}
+  const navn=document.getElementById('g-navn').value.trim();
+  const dato=document.getElementById('g-dato').value;
+  const distanse=document.getElementById('g-distanse').value;
+  const maalTid=document.getElementById('g-maal-tid').value.trim();
+  const prioritet=document.getElementById('g-prioritet').value;
+  const status=document.getElementById('add-goal-status');
+  if(!navn||!dato){status.textContent='⚠ Navn og dato er påkrevd';status.style.color='var(--warn)';return;}
+  status.textContent='Lagrer…';status.style.color='var(--text2)';
+  const vurdering=`Distanse: ${distanse}\nPrioritet: ${prioritet}`;
+  try{
+    const r=await fetch(url+'/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({navn,dato,planlagtPuls:maalTid||undefined,vurdering})});
+    const d=await r.json();
+    if(r.ok){
+      status.textContent='✓ Lagret!';status.style.color='var(--accent)';
+      // Reset form
+      document.getElementById('g-navn').value='';
+      document.getElementById('g-dato').value='';
+      document.getElementById('g-maal-tid').value='';
+      await fetchGoals();
+      setTimeout(()=>toggleAddGoal(),800);
+    }else{status.textContent='✗ '+(d.error||r.status);status.style.color='var(--danger)';}
+  }catch(e){status.textContent='✗ '+e.message;status.style.color='var(--danger)';}
+}
+
+async function markGoalDone(id){
+  const url=getWorkerUrl();if(!url)return;
+  const result=prompt('Resultat (f.eks. 1:42:30):');
+  const body={status:'Gjennomført'};
+  if(result)body.planlagtPuls=result; // store actual result in planlagtPuls field for now
+  try{
+    const r=await fetch(`${url}/api/okter/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.ok){await fetchGoals();await fetchOkter();}
+  }catch(e){alert('Feil: '+e.message);}
+}
+
+function updateIdagCountdowns(){
+  // Dynamic countdowns from allGoals, sorted by date
+  const today=getTodayDate();
+  const upcoming=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=today).sort((a,b)=>a.dato.localeCompare(b.dato));
+
+  // Update countdown cards (up to 2 shown in I dag)
+  const countdownGrid=document.getElementById('idag-countdown-grid');
+  if(!countdownGrid)return;
+  if(!upcoming.length){countdownGrid.innerHTML='<div class="stat-card" style="grid-column:1/-1;"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:13px">—</div><div class="stat-sub">Ingen planlagte løp</div></div>';return;}
+  countdownGrid.innerHTML=upcoming.slice(0,2).map(g=>{
+    const days=daysUntil(g.dato);
+    const daysTxt=days===0?'I dag!':(days>0?`${days} dager`:'Passert');
+    const dateTxt=new Date(g.dato+'T12:00:00').toLocaleDateString('no-NO',{day:'numeric',month:'short'});
+    return`<div class="stat-card"><div class="stat-label">${esc(g.navn.length>20?g.navn.slice(0,18)+'…':g.navn)}</div><div class="stat-val" style="font-size:${days>99?'15px':'20px'}">${daysTxt}</div><div class="stat-sub">${dateTxt}${g.planlagtPuls?' · '+g.planlagtPuls:''}</div></div>`;
+  }).join('');
 }
 
 // ── Plan chat ─────────────────────────────────────────────────────────────────
@@ -1196,11 +1424,24 @@ async function sendPlanMelding(){
 
   const prinsipper=planPrinsipper||localStorage.getItem('fase_prinsipper')||'';
 
-  const systemCtx=`Du er personlig trener til Arnar (33 år, pappaperm, hofte/kne-rehab). Maks HR: 199 bpm.
+  // Goals context
+  const goalsCtx=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=today)
+    .sort((a,b)=>a.dato.localeCompare(b.dato))
+    .map(g=>`${g.dato}: ${g.navn}${g.planlagtPuls?' (mål: '+g.planlagtPuls+')':''}${g.vurdering?.match(/Prioritet:\s*([ABC])/i)?' — Prioritet '+g.vurdering.match(/Prioritet:\s*([ABC])/i)[1]:''}`)
+    .join('\n');
+  const pastGoalsCtx=allGoals.filter(g=>g.status==='Gjennomført')
+    .map(g=>`${g.dato}: ${g.navn}${g.planlagtPuls?' — Resultat: '+g.planlagtPuls:''}`)
+    .join('\n');
+  const kontekstFull=treningskontekst||localStorage.getItem('treningskontekst')||'';
+
+  const systemCtx=`Du er personlig trener til Arnar. Maks HR: 199 bpm.
 Soner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.
 I dag: ${today}. Fase: ${faseNavn}.
-${prinsipper?`Prinsipper:\n${prinsipper}\n`:''}
-Mål: Sommernattsløpet 10k 20. juni 2026, sub-1:45 Oslo HM 12. september 2026.
+${kontekstFull?`TRENINGSKONTEKST:\n${kontekstFull}\n`:''}
+${prinsipper?`Fase-prinsipper:\n${prinsipper}\n`:''}
+KOMMENDE LØP:
+${goalsCtx||'Ingen registrerte mål'}
+${pastGoalsCtx?`\nTIDLIGERE LØP:\n${pastGoalsCtx}`:''}
 
 STATISTIKK:
 - Gjennomsnittlig ukesvolum (siste 8 uker): ${avgWeekMin!=null?avgWeekMin+' min/uke':'ukjent'}
@@ -1352,7 +1593,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 loadSettings();
 loadCalSettings();
 loadPrinsipper();
-fetchOkter();
+loadKontekst();
+fetchOkter().then(()=>fetchGoals());
 </script>
 </body>
 </html>

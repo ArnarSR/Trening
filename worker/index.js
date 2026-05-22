@@ -92,6 +92,45 @@ export default {
         return savePrinsipper(env, tekst || '');
       }
 
+      // GET /api/kontekst
+      if (path === '/api/kontekst' && request.method === 'GET') {
+        return getKontekst(env);
+      }
+
+      // POST /api/kontekst
+      if (path === '/api/kontekst' && request.method === 'POST') {
+        const { tekst } = await request.json();
+        return saveKontekst(env, tekst || '');
+      }
+
+      // GET /api/goals
+      if (path === '/api/goals' && request.method === 'GET') {
+        const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
+          filter: { property: 'Type', select: { equals: 'Race' } },
+          sorts: [{ property: 'Dato', direction: 'ascending' }],
+          page_size: 50,
+        });
+        const data = await res.json();
+        return json({ goals: (data.results || []).map(mapPage) });
+      }
+
+      // POST /api/goals
+      if (path === '/api/goals' && request.method === 'POST') {
+        const body = await request.json();
+        const props = {
+          'Navn':   { title: [{ text: { content: body.navn || 'Nytt løp' } }] },
+          'Dato':   { date: { start: body.dato } },
+          'Type':   { select: { name: 'Race' } },
+          'Status': { select: { name: 'To Do' } },
+        };
+        if (body.planlagtPuls) props['Planlagt puls'] = { rich_text: [{ text: { content: body.planlagtPuls } }] };
+        if (body.vurdering)   props['Vurdering']     = { rich_text: [{ text: { content: body.vurdering } }] };
+        const createBody = { parent: { database_id: DB_ID }, properties: props, icon: { type: 'emoji', emoji: '🏁' } };
+        const res  = await notionRequest(env, 'POST', '/pages', createBody);
+        const data = await res.json();
+        return json({ ok: true, id: data.id });
+      }
+
       // GET /api/calendar
       if (path === '/api/calendar' && request.method === 'GET') {
         const from = url.searchParams.get('from') || new Date().toISOString().split('T')[0];
@@ -300,6 +339,36 @@ async function savePrinsipper(env, tekst) {
     const data = await res.json();
     return json({ ok: true, id: data.id });
   }
+}
+
+async function getKontekst(env) {
+  const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
+    filter: { property: 'Navn', title: { equals: 'Treningskontekst' } },
+    page_size: 1,
+  });
+  const data = await res.json();
+  const page = data.results?.[0];
+  if (!page) return json({ tekst: '', id: null });
+  return json({ tekst: page.properties['Vurdering']?.rich_text?.[0]?.plain_text || '', id: page.id });
+}
+
+async function saveKontekst(env, tekst) {
+  const findRes  = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
+    filter: { property: 'Navn', title: { equals: 'Treningskontekst' } }, page_size: 1,
+  });
+  const existing = (await findRes.json()).results?.[0];
+  const props    = { 'Vurdering': { rich_text: [{ text: { content: tekst } }] } };
+  if (existing) {
+    await notionRequest(env, 'PATCH', `/pages/${existing.id}`, { properties: props });
+    return json({ ok: true, id: existing.id });
+  }
+  const res  = await notionRequest(env, 'POST', '/pages', {
+    parent: { database_id: DB_ID },
+    properties: { 'Navn': { title: [{ text: { content: 'Treningskontekst' } }] }, ...props },
+    icon: { type: 'emoji', emoji: '🧠' },
+  });
+  const data = await res.json();
+  return json({ ok: true, id: data.id });
 }
 
 // ── Google Calendar ───────────────────────────────────────────────────────────

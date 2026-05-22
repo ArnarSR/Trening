@@ -149,6 +149,12 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:var(--sans);font
 .setting-input{flex:1;min-width:0;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:7px;padding:9px 10px;font-family:var(--mono);font-size:12px;color:var(--text);outline:none;-webkit-appearance:none;}
 .setting-input:focus{border-color:var(--accent);}
 a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;padding:4px 0;}
+#plan-chat{max-height:55vh;overflow-y:auto;padding-right:2px;scroll-behavior:smooth;}
+.plan-bubble-user{display:flex;justify-content:flex-end;}.plan-bubble-ai{display:flex;justify-content:flex-start;}
+.pb{max-width:86%;padding:10px 13px;font-size:13px;line-height:1.65;white-space:pre-wrap;border:0.5px solid;}
+.pb-user{background:var(--accent);color:#0f0f0f;border-color:var(--accent);border-radius:14px 14px 4px 14px;font-weight:500;}
+.pb-ai{background:var(--bg3);color:var(--text);border-color:var(--border-hi);border-radius:14px 14px 14px 4px;}
+.plan-empty{text-align:center;padding:30px 16px;color:var(--text3);font-size:12px;line-height:1.7;}
 </style>
 </head>
 <body>
@@ -165,6 +171,7 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     <button class="nav-item active" onclick="showView('idag')"><span class="nav-dot dot-green"></span>I dag</button>
     <button class="nav-item" onclick="showView('okter')"><span class="nav-dot dot-green"></span>Øktlogg</button>
     <button class="nav-item" onclick="showView('analyse')"><span class="nav-dot dot-blue"></span>Analyse</button>
+    <button class="nav-item" onclick="showView('plan')"><span class="nav-dot dot-blue"></span>Treningsplan</button>
   </div>
   <div class="nav-section" style="margin-top:6px;">
     <div class="nav-label">Admin</div>
@@ -333,6 +340,20 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   </div>
 </div>
 
+<!-- ══ PLAN ══ -->
+<div id="view-plan" class="view">
+  <div class="page-header"><div class="page-title">Treningsplan</div><div class="page-sub">Diskuter og bygg planen din med Claude</div></div>
+  <div id="plan-chat" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;min-height:120px;"></div>
+  <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:12px;">
+    <textarea class="form-input" id="plan-input" style="width:100%;min-height:72px;resize:none;font-family:var(--sans);margin-bottom:8px;border:none;background:transparent;padding:0;" placeholder="Hva skal fokuset være neste uke? Lag en 4-ukers plan mot Sommernatt…"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-accent" id="plan-send-btn" onclick="sendPlanMelding()" style="flex:1;">Send</button>
+      <button class="btn btn-sm" onclick="clearPlanChat()">Tøm</button>
+      <button class="btn btn-sm" id="plan-save-btn" onclick="savePlanToNotion()" style="display:none;">→ Notion</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ INNSTILLINGER ══ -->
 <div id="view-innstillinger" class="view">
   <div class="page-header"><div class="page-title">Innstillinger</div></div>
@@ -408,6 +429,7 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   <button class="bn-item active" id="bn-idag" onclick="showView('idag')"><span class="bn-icon">📅</span><span>I dag</span></button>
   <button class="bn-item" id="bn-okter" onclick="showView('okter')"><span class="bn-icon">📋</span><span>Økter</span></button>
   <button class="bn-item" id="bn-analyse" onclick="showView('analyse')"><span class="bn-icon">📊</span><span>Analyse</span></button>
+  <button class="bn-item" id="bn-plan" onclick="showView('plan')"><span class="bn-icon">📝</span><span>Plan</span></button>
   <button class="bn-item" id="bn-innstillinger" onclick="showView('innstillinger')"><span class="bn-icon">⚙️</span><span>Innst.</span></button>
 </nav>
 </div>
@@ -426,6 +448,8 @@ let allOkter = [];
 let currentOkt = null;
 let lastAnalysis = '';
 let lastAnalysisTitle = '';
+let planHistory = [];
+let lastPlanResponse = '';
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 function getWorkerUrl(){try{return localStorage.getItem('worker_url')||'';}catch(e){return '';}}
@@ -596,11 +620,19 @@ function renderOkter(){
     const div=document.createElement('div');
     div.className='okt-row';
     div.dataset.id=okt.id;
+    const zone=okt.faktiskSnittHR?getZone(okt.faktiskSnittHR):null;
+    const zoneTxt=zone?`<span class="zone-pill ${zone.c}">${zone.n}</span>`:'';
+    const varighetTxt=okt.varighet?`${okt.varighet} min`:'';
+    const effektTxt=[okt.type,varighetTxt].filter(Boolean).join(' · ');
     div.innerHTML=`
-      <span class="okt-type ${typeClass}">${okt.type?.toUpperCase().slice(0,5)||'ØKT'}</span>
+      <span class="okt-type ${typeClass}">${okt.sport?okt.sport.split(' ')[0]:(okt.type?.toUpperCase().slice(0,2)||'ØK')}</span>
       <div class="okt-center">
         <div class="okt-name">${esc(okt.navn)}</div>
-        <div class="okt-date">${dato}${okt.fase?' · '+okt.fase:''}</div>
+        <div class="okt-date" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+          <span>${dato}${okt.fase?' · '+okt.fase:''}</span>
+          ${effektTxt?`<span style="color:var(--text3);">·</span><span style="color:var(--text2);">${esc(effektTxt)}</span>`:''}
+          ${zoneTxt}
+        </div>
       </div>
       <div class="okt-right">
         <div class="okt-hr">${hrTxt}</div>
@@ -918,6 +950,133 @@ async function markAsComplete(oktId){
     else{alert('Klarte ikke oppdatere status');}
   }catch(e){alert('Feil: '+e.message);}
 }
+
+// ── Plan chat ─────────────────────────────────────────────────────────────────
+function renderPlanBubble(role, text){
+  const chat=document.getElementById('plan-chat');
+  // Remove empty-state placeholder if present
+  const emp=chat.querySelector('.plan-empty');if(emp)emp.remove();
+  const wrap=document.createElement('div');
+  wrap.className=role==='user'?'plan-bubble-user':'plan-bubble-ai';
+  const bubble=document.createElement('div');
+  bubble.className='pb '+(role==='user'?'pb-user':'pb-ai');
+  bubble.textContent=text;
+  wrap.appendChild(bubble);
+  chat.appendChild(wrap);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+function showPlanEmpty(){
+  const chat=document.getElementById('plan-chat');
+  if(!chat.querySelector('.plan-empty')){
+    const div=document.createElement('div');
+    div.className='plan-empty';
+    div.innerHTML='💬 Still spørsmål om treningen din.<br>Bygg en plan, diskuter faser, analyser progresjon.';
+    chat.appendChild(div);
+  }
+}
+
+async function sendPlanMelding(){
+  const input=document.getElementById('plan-input');
+  const msg=input.value.trim();
+  if(!msg)return;
+  const url=getWorkerUrl();
+  if(!url){alert('Sett Worker URL under Innstillinger');showView('innstillinger');return;}
+
+  input.value='';
+  renderPlanBubble('user',msg);
+  planHistory.push({role:'user',content:msg});
+
+  const btn=document.getElementById('plan-send-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
+
+  // Loading bubble
+  const chat=document.getElementById('plan-chat');
+  const loadWrap=document.createElement('div');
+  loadWrap.className='plan-bubble-ai';
+  loadWrap.innerHTML=`<div class="pb pb-ai" style="color:var(--text3);"><span class="spinner"></span> Tenker…</div>`;
+  chat.appendChild(loadWrap);
+  chat.scrollTop=chat.scrollHeight;
+
+  // Build context
+  const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført');
+  const oktSummary=gjennomfort.slice(0,20).map(o=>
+    `${o.dato||'?'}: ${o.navn} — ${o.sport||o.type||'?'}, HR ${o.faktiskSnittHR||'?'}/${o.faktiskMaksHR||'?'}, ${o.varighet||'?'} min, Type: ${o.type||'?'}`
+  ).join('\n');
+  const prinsipper=localStorage.getItem('fase_prinsipper')||'';
+  const faseNavn=localStorage.getItem('fase_navn')||'Fase 0';
+
+  const historyLines=planHistory.slice(0,-1).map(m=>(m.role==='user'?'Arnar':'Trener')+': '+m.content).join('\n\n');
+
+  const systemCtx=`Du er personlig trener til Arnar (33 år, pappaperm, hofte/kne-rehab). Maks HR: 199 bpm.
+Soner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.
+Nåværende fase: ${faseNavn}${prinsipper?`\nFase-prinsipper:\n${prinsipper}`:''}
+
+Siste gjennomførte økter:
+${oktSummary||'(ingen ennå)'}
+
+Mål: Sommernattsløpet 10k 20. juni 2026, sub-1:45 Oslo HM 12. september 2026.
+Svar på norsk, konkret og motiverende. Gi strukturerte svar med linjeskift.`;
+
+  const fullPrompt=systemCtx+(historyLines?`\n\nTidligere samtale:\n${historyLines}`:'')+`\n\nArnar: ${msg}\nTrener:`;
+
+  try{
+    const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:fullPrompt})});
+    const d=await r.json();
+    const text=d.text||'Ingen respons.';
+    chat.removeChild(loadWrap);
+    renderPlanBubble('assistant',text);
+    planHistory.push({role:'assistant',content:text});
+    lastPlanResponse=text;
+    document.getElementById('plan-save-btn').style.display='inline-flex';
+  }catch(e){
+    chat.removeChild(loadWrap);
+    renderPlanBubble('assistant','⚠ Feil: '+e.message);
+  }
+  btn.disabled=false;btn.textContent='Send';
+}
+
+function clearPlanChat(){
+  planHistory=[];lastPlanResponse='';
+  const chat=document.getElementById('plan-chat');
+  chat.innerHTML='';
+  document.getElementById('plan-save-btn').style.display='none';
+  showPlanEmpty();
+}
+
+async function savePlanToNotion(){
+  if(!lastPlanResponse)return;
+  const url=getWorkerUrl();
+  if(!url){alert('Sett Worker URL');showView('innstillinger');return;}
+  const btn=document.getElementById('plan-save-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
+  const today=getTodayDate();
+  try{
+    const r=await fetch(url+'/api/okter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      navn:'Treningsplan '+today,
+      vurdering:lastPlanResponse,
+    })});
+    if(r.ok){
+      btn.textContent='✓ Lagret';
+      btn.style.cssText='color:var(--accent);border-color:var(--accent);background:rgba(200,240,96,0.08);';
+    }else{
+      const e=await r.json();
+      btn.textContent='✗ '+(e.error||r.status);
+      btn.disabled=false;
+    }
+  }catch(e){btn.textContent='✗ '+e.message;btn.disabled=false;}
+}
+
+// ── Plan chat Enter key support ───────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  const planInput=document.getElementById('plan-input');
+  if(planInput){
+    planInput.addEventListener('keydown',e=>{
+      if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();sendPlanMelding();}
+    });
+  }
+  showPlanEmpty();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadSettings();

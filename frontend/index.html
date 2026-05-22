@@ -200,12 +200,30 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     <div class="stat-card"><div class="stat-label">Gjenstår</div><div class="stat-val" id="idag-gjenstaar">—</div><div class="stat-sub">I fase</div></div>
   </div>
 
+  <!-- Fase-prinsipper -->
+  <div id="fase-prinsipper-section" style="display:none;margin-bottom:14px;">
+    <div class="sec-head" style="margin-bottom:8px;">
+      <div class="sec-title" id="fase-prinsipper-title">Fase-prinsipper</div>
+      <button class="btn btn-sm" onclick="showView('innstillinger')" style="font-size:10px;">Rediger</button>
+    </div>
+    <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:14px 16px;font-size:12px;line-height:1.7;color:var(--text2);white-space:pre-wrap;" id="fase-prinsipper-tekst"></div>
+  </div>
+
   <!-- Dagens økt -->
   <div class="sec-head" style="margin-top:16px;margin-bottom:8px;">
     <div class="sec-title">Dagens økt</div>
   </div>
   <div id="idag-daily-section" class="card">
     <div class="empty-state" id="idag-daily-empty"><div class="icon">✨</div>Ingen økt i dag</div>
+  </div>
+
+  <!-- AI-vurdering av dagens økt -->
+  <div id="idag-ai-section" style="display:none;margin-top:14px;">
+    <div class="sec-head" style="margin-bottom:8px;">
+      <div class="sec-title">Treneranalyse</div>
+      <span id="idag-ai-status" style="font-size:10px;font-family:var(--mono);color:var(--text3);"></span>
+    </div>
+    <div class="analysis-box" id="idag-ai-text"></div>
   </div>
 
   <!-- Neste 7 dager -->
@@ -334,6 +352,20 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     </div>
   </div>
   <div class="settings-section">
+    <div class="settings-title">Fase-prinsipper</div>
+    <div class="settings-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Skriv inn prinsippene for nåværende fase. Vises øverst i I dag-visningen.</div>
+      <div class="form-field" style="margin-bottom:8px;">
+        <label class="form-label">Fase-navn</label>
+        <input type="text" class="setting-input" id="s-fase-navn" placeholder="Fase 0 — Aktiv restitusjon" oninput="savePrinsipper()">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Prinsipper</label>
+        <textarea class="setting-input" id="s-prinsipper" rows="6" placeholder="• Maks 3 løpeøkter per uke&#10;• All løping i S1–S2&#10;• Prioriter søvn og restitusjon" oninput="savePrinsipper()" style="resize:vertical;min-height:120px;font-family:var(--sans);font-size:12px;line-height:1.6;"></textarea>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
     <div class="settings-title">Strava-synk</div>
     <div class="settings-card">
       <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Henter siste 80 aktiviteter fra Strava og matcher mot Notion på dato. Oppdaterer HR, pace, varighet og sport. Oppretter nye sider for aktiviteter uten match.</div>
@@ -405,6 +437,30 @@ function loadSettings(){
   try{document.getElementById('s-worker-url').value=localStorage.getItem('worker_url')||'';}catch(e){}
   updateDots();
 }
+function savePrinsipper(){
+  try{
+    localStorage.setItem('fase_navn',document.getElementById('s-fase-navn').value);
+    localStorage.setItem('fase_prinsipper',document.getElementById('s-prinsipper').value);
+  }catch(e){}
+  renderPrinsipper();
+}
+function loadPrinsipper(){
+  try{
+    document.getElementById('s-fase-navn').value=localStorage.getItem('fase_navn')||'';
+    document.getElementById('s-prinsipper').value=localStorage.getItem('fase_prinsipper')||'';
+  }catch(e){}
+  renderPrinsipper();
+}
+function renderPrinsipper(){
+  const navn=localStorage.getItem('fase_navn')||'';
+  const tekst=localStorage.getItem('fase_prinsipper')||'';
+  const sec=document.getElementById('fase-prinsipper-section');
+  if(!sec)return;
+  if(!tekst.trim()){sec.style.display='none';return;}
+  sec.style.display='block';
+  document.getElementById('fase-prinsipper-title').textContent=navn||'Fase-prinsipper';
+  document.getElementById('fase-prinsipper-tekst').textContent=tekst;
+}
 function updateDots(){
   const ok=!!getWorkerUrl();
   const cls='conn-dot '+(ok?'ok':'err');
@@ -439,6 +495,7 @@ async function syncStrava(){
       const msg=`✓ ${d.synced} oppdatert, ${d.created} ny av ${d.total}`;
       if(resultEl){resultEl.textContent=msg;resultEl.style.color='var(--accent)';}
       await fetchOkter();
+      await autoAnalyseIdagOkt();
     }else{
       const msg='✗ '+(d.error||r.status);
       if(resultEl){resultEl.textContent=msg;resultEl.style.color='var(--danger)';}
@@ -447,6 +504,53 @@ async function syncStrava(){
     if(resultEl){resultEl.textContent='✗ '+e.message;resultEl.style.color='var(--danger)';}
   }
   btns.forEach(id=>{const el=document.getElementById(id);if(el){el.disabled=false;el.innerHTML=id==='sb-sync-btn'?'⟳ Synk Strava':'⟳ Synk Strava nå';}});
+}
+
+// ── Auto AI-vurdering ─────────────────────────────────────────────────────────
+async function autoAnalyseIdagOkt(){
+  const url=getWorkerUrl();
+  if(!url)return;
+  const today=getTodayDate();
+  const okt=allOkter.find(o=>o.dato===today&&o.status==='Gjennomført');
+  if(!okt||!okt.faktiskSnittHR)return; // Kun hvis synket med HR-data
+  if(okt.vurdering&&okt.vurdering.length>20)return; // Allerede vurdert
+
+  const aiSec=document.getElementById('idag-ai-section');
+  const aiBox=document.getElementById('idag-ai-text');
+  const aiStatus=document.getElementById('idag-ai-status');
+  if(!aiSec)return;
+  aiSec.style.display='block';
+  aiStatus.textContent='Analyserer…';
+  aiBox.className='analysis-box loading';
+  aiBox.textContent='Claude analyserer dagens økt…';
+
+  const prinsipper=localStorage.getItem('fase_prinsipper')||'';
+  const prompt=`Du er treneren til Arnar (33 år, pappaperm, hofte/kne-rehab). Maks HR: 199 bpm.
+Soner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.
+${prinsipper?`\nFase-prinsipper:\n${prinsipper}`:''}
+
+Dagens økt: ${okt.navn}
+Sport: ${okt.sport||okt.type||'—'} | Type: ${okt.type||'—'}
+Snitt-HR: ${okt.faktiskSnittHR||'—'} | Maks-HR: ${okt.faktiskMaksHR||'—'}
+Varighet: ${okt.varighet||'—'} min | Pace: ${okt.pace||'—'}
+
+Gi en kort treneranalyse på norsk (3–4 setninger). Er intensiteten riktig for fasen? Hva var bra? Hva justeres til neste gang?`;
+
+  try{
+    const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    const d=await r.json();
+    const text=d.text||'Ingen respons.';
+    aiBox.className='analysis-box';
+    aiBox.textContent=text;
+    aiStatus.textContent='✓ Lagret til Notion';
+    // Lagre til Notion
+    await fetch(`${url}/api/okter/${okt.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({vurdering:text})});
+    okt.vurdering=text;
+  }catch(e){
+    aiBox.className='analysis-box error';
+    aiBox.textContent='Kunne ikke analysere: '+e.message;
+    aiStatus.textContent='';
+  }
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -717,8 +821,22 @@ function renderIdagView(){
   const dailySection=document.getElementById('idag-daily-section');
   if(todayOkt){
     dailySection.innerHTML=renderIdagOktRow(todayOkt,true);
+    // Vis lagret vurdering hvis den finnes
+    if(todayOkt.vurdering&&todayOkt.vurdering.length>20){
+      const aiSec=document.getElementById('idag-ai-section');
+      const aiBox=document.getElementById('idag-ai-text');
+      const aiStatus=document.getElementById('idag-ai-status');
+      if(aiSec&&!aiBox.textContent){
+        aiSec.style.display='block';
+        aiBox.className='analysis-box';
+        aiBox.textContent=todayOkt.vurdering;
+        aiStatus.textContent='';
+      }
+    }
   }else{
     dailySection.innerHTML='<div class="empty-state"><div class="icon">✨</div>Ingen økt i dag</div>';
+    const aiSec=document.getElementById('idag-ai-section');
+    if(aiSec)aiSec.style.display='none';
   }
 
   const weekSection=document.getElementById('idag-week-section');
@@ -803,6 +921,7 @@ async function markAsComplete(oktId){
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadSettings();
+loadPrinsipper();
 fetchOkter();
 </script>
 </body>

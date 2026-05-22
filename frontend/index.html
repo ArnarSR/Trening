@@ -253,8 +253,36 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     <div class="analysis-box" id="idag-ai-text"></div>
   </div>
 
-  <!-- Neste 7 dager -->
+  <!-- Dagbok / logg -->
   <div class="sec-head" style="margin-top:20px;margin-bottom:8px;">
+    <div class="sec-title">Dagslogg</div>
+    <button class="btn btn-sm" onclick="toggleDagbokForm()">+ Logg</button>
+  </div>
+  <div id="dagbok-form" style="display:none;background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:var(--rlg);padding:14px;margin-bottom:12px;">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="dagbok-chips">
+      <button class="chip dagbok-chip active" data-cat="Generell" data-icon="📝" onclick="selectDagbokCat(this)">📝 Generell</button>
+      <button class="chip dagbok-chip" data-cat="Helse" data-icon="🤒" onclick="selectDagbokCat(this)">🤒 Helse</button>
+      <button class="chip dagbok-chip" data-cat="Skade" data-icon="🩹" onclick="selectDagbokCat(this)">🩹 Skade</button>
+      <button class="chip dagbok-chip" data-cat="Humør" data-icon="😊" onclick="selectDagbokCat(this)">😊 Humør</button>
+    </div>
+    <textarea class="form-input" id="dagbok-tekst" rows="3" placeholder="Skriv her…" style="width:100%;margin-bottom:8px;font-family:var(--sans);"></textarea>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);">
+        <span>Smerte:</span>
+        <select class="form-input" id="dagbok-smerte" style="width:70px;padding:6px 8px;">
+          <option value="">—</option>
+          <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
+          <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+        </select>
+      </div>
+      <button class="btn btn-accent btn-sm" onclick="logDagbok()" style="flex:1;">Logg</button>
+      <span id="dagbok-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+    </div>
+  </div>
+  <div id="dagbok-list" style="margin-bottom:14px;"></div>
+
+  <!-- Neste 7 dager -->
+  <div class="sec-head" style="margin-top:4px;margin-bottom:8px;">
     <div class="sec-title">Neste 7 dager</div>
   </div>
   <div id="idag-week-section" class="card">
@@ -388,23 +416,32 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 
   <div class="add-goal-form" id="add-goal-form" style="display:none;">
     <div class="form-grid">
-      <div class="form-field full"><label class="form-label">Løpsnavn</label>
+      <div class="form-field full">
+        <label class="form-label">Type mål</label>
+        <select class="form-input" id="g-goaltype" onchange="updateGoalForm()">
+          <option value="Race">🏁 Løp / Race</option>
+          <option value="Mål">🎯 Generelt mål</option>
+        </select>
+      </div>
+      <div class="form-field full"><label class="form-label" id="g-navn-label">Løpsnavn</label>
         <input type="text" class="form-input" id="g-navn" placeholder="Oslo Halvmaraton 2026"></div>
-      <div class="form-field"><label class="form-label">Dato</label>
+      <div class="form-field" id="g-dato-field"><label class="form-label">Dato</label>
         <input type="date" class="form-input" id="g-dato"></div>
-      <div class="form-field"><label class="form-label">Distanse</label>
+      <div class="form-field" id="g-distanse-field"><label class="form-label">Distanse</label>
         <select class="form-input" id="g-distanse">
           <option>5k</option><option>10k</option><option selected>Halvmaraton</option>
           <option>Maraton</option><option>Terrengløp</option><option>Annet</option>
         </select></div>
-      <div class="form-field"><label class="form-label">Mål-tid</label>
+      <div class="form-field"><label class="form-label" id="g-target-label">Mål-tid</label>
         <input type="text" class="form-input" id="g-maal-tid" placeholder="sub-1:45"></div>
-      <div class="form-field"><label class="form-label">Prioritet</label>
+      <div class="form-field" id="g-prioritet-field"><label class="form-label">Prioritet</label>
         <select class="form-input" id="g-prioritet">
           <option value="A">A — Hovedmål</option>
           <option value="B" selected>B — Viktig</option>
           <option value="C">C — Treningsløp</option>
         </select></div>
+      <div class="form-field full"><label class="form-label">Notater</label>
+        <textarea class="form-input" id="g-notater" rows="2" placeholder="Valgfrie detaljer…" style="font-family:var(--sans);"></textarea></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:4px;">
       <button class="btn btn-accent" onclick="addGoal()" style="flex:1;">Lagre</button>
@@ -416,9 +453,14 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   <div id="goals-upcoming"></div>
 
   <div class="sec-head" style="margin-top:20px;">
+    <div class="sec-title">Generelle mål</div>
+  </div>
+  <div id="goals-general"><div class="empty-state" style="padding:20px;font-size:12px;color:var(--text3);">Legg til mål som å bli slankere, løpe 3x per uke, osv.</div></div>
+
+  <div class="sec-head" style="margin-top:20px;">
     <div class="sec-title">Gjennomført</div>
   </div>
-  <div id="goals-past"><div class="empty-state" style="padding:20px;"><div class="icon" style="font-size:20px;">🏅</div>Ingen gjennomførte løp ennå</div></div>
+  <div id="goals-past"><div class="empty-state" style="padding:20px;"><div class="icon" style="font-size:20px;">🏅</div>Ingen gjennomførte mål ennå</div></div>
 </div>
 
 <!-- ══ INNSTILLINGER ══ -->
@@ -458,11 +500,23 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     </div>
   </div>
   <div class="settings-section">
-    <div class="settings-title">Treningskontekst</div>
+    <div class="settings-title">Profil</div>
     <div class="settings-card">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Permanent profil som alltid sendes til Claude. Inkluder alder, maks HR, skadehistorikk, treningsbakgrunn og langsiktige ambisjoner.</div>
-      <textarea class="setting-input" id="s-kontekst" rows="8" style="resize:vertical;min-height:160px;font-family:var(--sans);font-size:12px;line-height:1.6;width:100%;" oninput="onKontekstInput()" placeholder="Alder: 33 år&#10;Maks HR: 199 bpm&#10;Skader/rehab: Hofte og kne (2026)&#10;Treningsbakgrunn: ...&#10;&#10;Langsiktige ambisjoner:&#10;• Sub-1:45 halvmaraton&#10;• ..."></textarea>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+      <div class="form-grid" style="margin-bottom:12px;">
+        <div class="form-field">
+          <label class="form-label">Fødselsdato</label>
+          <input type="date" class="setting-input" id="s-fodselsdato" oninput="onProfilInput()">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Maks HR <span id="s-alder-display" style="color:var(--accent);font-weight:500;"></span></label>
+          <input type="number" class="setting-input" id="s-maks-hr" placeholder="199" min="140" max="230" oninput="onProfilInput()">
+        </div>
+        <div class="form-field full">
+          <label class="form-label">Bakgrunn, skader og ambisjoner</label>
+          <textarea class="setting-input" id="s-profil-notater" rows="5" style="resize:vertical;min-height:100px;font-family:var(--sans);font-size:12px;line-height:1.6;" oninput="onProfilInput()" placeholder="Hofte og kne under rehab (2026). Begynte strukturert trening jan 2025. Vil løpe sub-1:45 HM og bli slankere…"></textarea>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
         <button class="btn btn-sm btn-accent" id="kontekst-save-btn" onclick="saveKontekstToNotion()">Lagre til Notion</button>
         <span id="kontekst-save-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
       </div>
@@ -479,15 +533,9 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     </div>
   </div>
   <div class="settings-section">
-    <div class="settings-title">Pulssoner (maks 199)</div>
+    <div class="settings-title">Pulssoner</div>
     <div class="settings-card">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;font-family:var(--mono);">
-        <div style="color:var(--text2);">S1</div><div style="color:var(--text3);">&lt;120</div>
-        <div style="color:var(--accent2);">S2</div><div style="color:var(--text2);">120–145</div>
-        <div style="color:var(--info);">S3</div><div style="color:var(--text2);">146–162</div>
-        <div style="color:var(--warn);">S4</div><div style="color:var(--text2);">163–178</div>
-        <div style="color:var(--danger);">S5</div><div style="color:var(--text2);">179–199</div>
-      </div>
+      <div id="zones-display" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;font-family:var(--mono);"></div>
     </div>
   </div>
   <div class="settings-section">
@@ -543,7 +591,15 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 
 <script>
 // ── Config ───────────────────────────────────────────────────────────────────
-const ZONES=[{n:'S1',min:0,max:119,c:'z1p'},{n:'S2',min:120,max:145,c:'z2p'},{n:'S3',min:146,max:162,c:'z3p'},{n:'S4',min:163,max:178,c:'z4p'},{n:'S5',min:179,max:999,c:'z5p'}];
+let MAX_HR = parseInt(localStorage.getItem('profil_maks_hr')||'199');
+function computeZones(m){return[
+  {n:'S1',min:0,                     max:Math.round(m*.60)-1,c:'z1p'},
+  {n:'S2',min:Math.round(m*.60),     max:Math.round(m*.73)-1,c:'z2p'},
+  {n:'S3',min:Math.round(m*.73),     max:Math.round(m*.81)-1,c:'z3p'},
+  {n:'S4',min:Math.round(m*.81),     max:Math.round(m*.90)-1,c:'z4p'},
+  {n:'S5',min:Math.round(m*.90),     max:999,                 c:'z5p'},
+];}
+let ZONES=computeZones(MAX_HR);
 function getZone(hr){return ZONES.find(z=>hr>=z.min&&hr<=z.max)||ZONES[0];}
 
 const TYPE_MAP={'Sone 2':'type-s2','Bakkeintervall':'type-bk','Terskel':'type-ts','Styrke':'type-st','Race':'type-ra','Rehab':'type-re'};
@@ -559,6 +615,7 @@ let planHistory = [];
 let lastPlanResponse = '';
 let allGoals = [];
 let treningskontekst = '';
+let allDagbok = [];
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 function getWorkerUrl(){try{return localStorage.getItem('worker_url')||'';}catch(e){return '';}}
@@ -784,6 +841,7 @@ async function fetchOkter(){
     allOkter=data.okter||[];
     renderOkter();
     renderIdagView();
+    renderDagbok();
     updateStats();
   }catch(e){renderEmpty('Klarte ikke hente fra Worker: '+e.message);}
   spin.style.display='none';
@@ -792,7 +850,7 @@ async function fetchOkter(){
 function renderOkter(){
   const list=document.getElementById('okt-list');
   if(!allOkter.length){renderEmpty('Ingen økter funnet i Notion');return;}
-  const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført');
+  const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført'&&o.type!=='Dagbok'&&o.type!=='Race'&&o.type!=='Mål');
   if(!gjennomfort.length){renderEmpty('Ingen gjennomførte økter ennå');return;}
   list.innerHTML='';
   gjennomfort.forEach(okt=>{
@@ -832,7 +890,7 @@ function renderEmpty(msg){
 }
 
 function updateStats(){
-  const done=allOkter.filter(o=>o.status==='Gjennomført').length;
+  const done=allOkter.filter(o=>o.status==='Gjennomført'&&o.type!=='Dagbok'&&o.type!=='Race'&&o.type!=='Mål').length;
   document.getElementById('s-done').textContent=done;
   const countEl=document.getElementById('okt-count');if(countEl)countEl.textContent=done;
   const race=allOkter.find(o=>o.type==='Race'&&o.navn?.includes('23:17'));
@@ -1014,8 +1072,8 @@ function renderIdagView(){
   const today=getTodayDate();
   const dates=getDateRange(7);
 
-  const todayOkt=allOkter.find(o=>o.dato===today&&o.status!=='Hoppet over');
-  const weekOkter=allOkter.filter(o=>dates.includes(o.dato)&&o.dato!==today&&o.status!=='Hoppet over')
+  const todayOkt=allOkter.find(o=>o.dato===today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Race'&&o.type!=='Mål');
+  const weekOkter=allOkter.filter(o=>dates.includes(o.dato)&&o.dato!==today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Race'&&o.type!=='Mål')
     .sort((a,b)=>new Date(a.dato)-new Date(b.dato))
     .slice(0,10);
 
@@ -1124,20 +1182,84 @@ async function markAsComplete(oktId){
   }catch(e){alert('Feil: '+e.message);}
 }
 
+// ── Profile ───────────────────────────────────────────────────────────────────
+function getAge(dateStr){
+  if(!dateStr)return null;
+  const today=new Date(),bd=new Date(dateStr);
+  let age=today.getFullYear()-bd.getFullYear();
+  if(today.getMonth()<bd.getMonth()||(today.getMonth()===bd.getMonth()&&today.getDate()<bd.getDate()))age--;
+  return age;
+}
+
+function buildKontekstFromProfile(){
+  const fodsel=localStorage.getItem('profil_fodselsdato')||'';
+  const maxHR=localStorage.getItem('profil_maks_hr')||'199';
+  const notater=localStorage.getItem('profil_notater')||'';
+  const age=getAge(fodsel);
+  const lines=[];
+  if(age)lines.push(`Alder: ${age} år`);
+  if(fodsel)lines.push(`Fødselsdato: ${fodsel}`);
+  lines.push(`Maks HR: ${maxHR} bpm`);
+  if(notater)lines.push('',notater);
+  return lines.join('\n');
+}
+
+function renderZones(){
+  const el=document.getElementById('zones-display');if(!el)return;
+  const colors=['var(--text2)','var(--accent2)','var(--info)','var(--warn)','var(--danger)'];
+  el.innerHTML=ZONES.map((z,i)=>`<div style="color:${colors[i]};">${z.n}</div><div style="color:var(--text2);">${z.min===0?'< '+z.max : z.max===999 ? z.min+'+':`${z.min}–${z.max}`}</div>`).join('');
+}
+
+function onProfilInput(){
+  const fodsel=document.getElementById('s-fodselsdato')?.value||'';
+  const maxHRval=parseInt(document.getElementById('s-maks-hr')?.value)||199;
+  const notater=document.getElementById('s-profil-notater')?.value||'';
+  // Update age display
+  const age=getAge(fodsel);
+  const ageEl=document.getElementById('s-alder-display');
+  if(ageEl)ageEl.textContent=age?`— ${age} år`:'';
+  // Update zones live
+  MAX_HR=maxHRval;ZONES=computeZones(MAX_HR);renderZones();
+  // Save to localStorage
+  try{
+    localStorage.setItem('profil_fodselsdato',fodsel);
+    localStorage.setItem('profil_maks_hr',String(maxHRval));
+    localStorage.setItem('profil_notater',notater);
+  }catch(e){}
+  const kontekst=buildKontekstFromProfile();
+  treningskontekst=kontekst;
+  localStorage.setItem('treningskontekst',kontekst);
+  document.getElementById('kontekst-save-status').textContent='';
+}
+
+function loadProfilFields(){
+  const fodsel=localStorage.getItem('profil_fodselsdato')||'';
+  const maxHRval=localStorage.getItem('profil_maks_hr')||'199';
+  const notater=localStorage.getItem('profil_notater')||'';
+  try{
+    document.getElementById('s-fodselsdato').value=fodsel;
+    document.getElementById('s-maks-hr').value=maxHRval;
+    document.getElementById('s-profil-notater').value=notater;
+  }catch(e){}
+  const age=getAge(fodsel);
+  const ageEl=document.getElementById('s-alder-display');
+  if(ageEl&&age)ageEl.textContent=`— ${age} år`;
+  MAX_HR=parseInt(maxHRval)||199;ZONES=computeZones(MAX_HR);renderZones();
+  treningskontekst=buildKontekstFromProfile();
+}
+
 // ── Treningskontekst ──────────────────────────────────────────────────────────
 function onKontekstInput(){
-  try{localStorage.setItem('treningskontekst',document.getElementById('s-kontekst').value);}catch(e){}
-  treningskontekst=document.getElementById('s-kontekst').value;
-  document.getElementById('kontekst-save-status').textContent='';
+  // kept for backward compat — profile now uses onProfilInput
 }
 
 async function saveKontekstToNotion(){
   const url=getWorkerUrl();
   const btn=document.getElementById('kontekst-save-btn');
   const status=document.getElementById('kontekst-save-status');
-  const tekst=document.getElementById('s-kontekst').value;
-  try{localStorage.setItem('treningskontekst',tekst);}catch(e){}
+  const tekst=buildKontekstFromProfile();
   treningskontekst=tekst;
+  localStorage.setItem('treningskontekst',tekst);
   if(!url){status.textContent='⚠ Sett Worker URL';status.style.color='var(--warn)';return;}
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
   try{
@@ -1149,21 +1271,74 @@ async function saveKontekstToNotion(){
 }
 
 async function loadKontekst(){
-  // Load from localStorage first (instant)
-  const cached=localStorage.getItem('treningskontekst')||'';
-  treningskontekst=cached;
-  try{document.getElementById('s-kontekst').value=cached;}catch(e){}
-  // Then sync from Notion
+  loadProfilFields();
+  // Sync from Notion in background (to catch updates from other devices)
   const url=getWorkerUrl();if(!url)return;
   try{
     const r=await fetch(url+'/api/kontekst');
     const d=await r.json();
-    if(r.ok&&d.tekst){
+    // Only overwrite localStorage if Notion has richer data and local profil fields are empty
+    if(r.ok&&d.tekst&&!localStorage.getItem('profil_fodselsdato')){
       treningskontekst=d.tekst;
       localStorage.setItem('treningskontekst',d.tekst);
-      try{document.getElementById('s-kontekst').value=d.tekst;}catch(e){}
     }
   }catch(e){}
+}
+
+// ── Dagbok ────────────────────────────────────────────────────────────────────
+let dagbokCat={cat:'Generell',icon:'📝'};
+
+function toggleDagbokForm(){
+  const f=document.getElementById('dagbok-form');
+  f.style.display=f.style.display==='none'?'block':'none';
+  if(f.style.display==='block')document.getElementById('dagbok-tekst').focus();
+}
+
+function selectDagbokCat(btn){
+  document.querySelectorAll('.dagbok-chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  dagbokCat={cat:btn.dataset.cat,icon:btn.dataset.icon};
+}
+
+async function logDagbok(){
+  const url=getWorkerUrl();
+  if(!url){alert('Sett Worker URL under Innstillinger');return;}
+  const tekst=document.getElementById('dagbok-tekst').value.trim();
+  if(!tekst)return;
+  const smerteVal=document.getElementById('dagbok-smerte').value;
+  const smerte=smerteVal!==''?parseInt(smerteVal):null;
+  const statusEl=document.getElementById('dagbok-status');
+  statusEl.textContent='Lagrer…';
+  const today=getTodayDate();
+  const navn=`${dagbokCat.icon} ${dagbokCat.cat}: ${tekst.slice(0,40)}${tekst.length>40?'…':''}`;
+  try{
+    const r=await fetch(url+'/api/dagbok',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({navn,dato:today,vurdering:tekst,smerte:smerte!==null?smerte:undefined,icon:dagbokCat.icon})});
+    const d=await r.json();
+    if(r.ok){
+      statusEl.textContent='✓ Logget';statusEl.style.color='var(--accent)';
+      document.getElementById('dagbok-tekst').value='';
+      document.getElementById('dagbok-smerte').value='';
+      await fetchOkter();
+      setTimeout(()=>{document.getElementById('dagbok-form').style.display='none';statusEl.textContent='';},1200);
+    }else{statusEl.textContent='✗ '+(d.error||r.status);statusEl.style.color='var(--danger)';}
+  }catch(e){statusEl.textContent='✗ '+e.message;statusEl.style.color='var(--danger)';}
+}
+
+function renderDagbok(){
+  const el=document.getElementById('dagbok-list');if(!el)return;
+  allDagbok=allOkter.filter(o=>o.type==='Dagbok').sort((a,b)=>b.dato.localeCompare(a.dato)).slice(0,7);
+  if(!allDagbok.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:4px 0;">Ingen logger ennå</div>';return;}
+  el.innerHTML=allDagbok.map(e=>{
+    const smerteTag=e.smerte!=null?`<span style="font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:3px;background:rgba(255,107,107,0.12);color:var(--danger);margin-left:4px;">Smerte ${e.smerte}</span>`:'';
+    return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;line-height:1.5;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+        <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">${formatDato(e.dato)}</span>
+        ${smerteTag}
+      </div>
+      <div style="color:var(--text2);">${esc(e.vurdering||e.navn)}</div>
+    </div>`;
+  }).join('');
 }
 
 // ── Goals / Mål ───────────────────────────────────────────────────────────────
@@ -1191,21 +1366,44 @@ function parsePriority(vurdering){
 
 function renderGoals(){
   const today=getTodayDate();
-  const upcoming=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=today).sort((a,b)=>a.dato.localeCompare(b.dato));
-  const past=allGoals.filter(g=>g.status==='Gjennomført'||g.dato<today).sort((a,b)=>b.dato.localeCompare(a.dato));
+  const races   =allGoals.filter(g=>g.type==='Race');
+  const general =allGoals.filter(g=>g.type==='Mål'||(!g.type));
+  const upcoming=races.filter(g=>g.status!=='Gjennomført'&&g.dato&&g.dato>=today).sort((a,b)=>a.dato.localeCompare(b.dato));
+  const past    =races.filter(g=>g.status==='Gjennomført'||(g.dato&&g.dato<today)).sort((a,b)=>b.dato.localeCompare(a.dato));
+  const genActive=general.filter(g=>g.status!=='Gjennomført');
+  const genDone  =general.filter(g=>g.status==='Gjennomført');
 
   const upEl=document.getElementById('goals-upcoming');
-  if(!upEl)return;
-  if(!upcoming.length){
-    upEl.innerHTML='<div class="empty-state" style="padding:24px;"><div class="icon" style="font-size:24px;">🏁</div>Ingen kommende løp. Legg til ditt første mål!</div>';
-  }else{
-    upEl.innerHTML=upcoming.map((g,i)=>renderRaceCard(g,i===0)).join('');
+  if(upEl){
+    upEl.innerHTML=upcoming.length?upcoming.map((g,i)=>renderRaceCard(g,i===0)).join('')
+      :'<div class="empty-state" style="padding:24px;"><div class="icon" style="font-size:24px;">🏁</div>Ingen kommende løp ennå</div>';
   }
 
+  const genEl=document.getElementById('goals-general');
+  if(genEl){
+    genEl.innerHTML=genActive.length?genActive.map(g=>renderGeneralGoalCard(g)).join('')
+      :'<div class="empty-state" style="padding:20px;font-size:12px;color:var(--text3);">Legg til mål som å bli slankere, løpe 3x per uke, osv.</div>';
+  }
+
+  const pastAll=[...past,...genDone].sort((a,b)=>b.dato.localeCompare(a.dato));
   const pastEl=document.getElementById('goals-past');
   if(pastEl){
-    pastEl.innerHTML=past.length?past.map(g=>renderRaceCard(g,false,true)).join(''):'<div class="empty-state" style="padding:20px;"><div class="icon" style="font-size:20px;">🏅</div>Ingen gjennomførte løp ennå</div>';
+    pastEl.innerHTML=pastAll.length?pastAll.map(g=>g.type==='Race'?renderRaceCard(g,false,true):renderGeneralGoalCard(g,true)).join('')
+      :'<div class="empty-state" style="padding:20px;"><div class="icon" style="font-size:20px;">🏅</div>Ingen gjennomførte mål ennå</div>';
   }
+}
+
+function renderGeneralGoalCard(g,isDone=false){
+  return`<div class="race-card${isDone?' done':''}" style="border-color:${isDone?'var(--border)':'rgba(255,159,67,0.3)'};">
+    <div style="font-size:28px;line-height:1;min-width:36px;text-align:center;">${isDone?'✅':'🎯'}</div>
+    <div class="race-info">
+      <div class="race-name">${esc(g.navn)}</div>
+      ${g.dato?`<div class="race-meta">${formatDato(g.dato)}</div>`:''}
+      ${g.planlagtPuls?`<div><span class="${isDone?'race-result':'race-target'}">${isDone?'':'Mål: '}${esc(g.planlagtPuls)}</span></div>`:''}
+      ${g.vurdering&&!g.vurdering.startsWith('Distanse:')?`<div style="font-size:11px;color:var(--text2);margin-top:4px;">${esc(g.vurdering.slice(0,80))}</div>`:''}
+    </div>
+    ${!isDone?`<button class="btn btn-sm" onclick="markGoalDone('${g.id}')" style="flex-shrink:0;">✓</button>`:''}
+  </div>`;
 }
 
 function renderRaceCard(g,isNext=false,isDone=false){
@@ -1230,6 +1428,18 @@ function renderRaceCard(g,isNext=false,isDone=false){
   </div>`;
 }
 
+function updateGoalForm(){
+  const goalType=document.getElementById('g-goaltype').value;
+  const isRace=goalType==='Race';
+  document.getElementById('g-navn-label').textContent=isRace?'Løpsnavn':'Målbeskrivelse';
+  document.getElementById('g-navn').placeholder=isRace?'Oslo Halvmaraton 2026':'Bli slankere, løpe 3x per uke…';
+  document.getElementById('g-target-label').textContent=isRace?'Mål-tid':'Suksess-kriterie';
+  document.getElementById('g-maal-tid').placeholder=isRace?'sub-1:45':'- 5 kg, 3 løp per uke…';
+  document.getElementById('g-distanse-field').style.display=isRace?'':'none';
+  document.getElementById('g-prioritet-field').style.display=isRace?'':'none';
+  document.getElementById('g-dato-field').querySelector('label').textContent=isRace?'Dato':'Måldato (valgfritt)';
+}
+
 function toggleAddGoal(){
   const form=document.getElementById('add-goal-form');
   form.style.display=form.style.display==='none'?'block':'none';
@@ -1239,29 +1449,32 @@ function toggleAddGoal(){
 async function addGoal(){
   const url=getWorkerUrl();
   if(!url){alert('Sett Worker URL under Innstillinger');return;}
+  const goalType=document.getElementById('g-goaltype').value;
+  const isRace=goalType==='Race';
   const navn=document.getElementById('g-navn').value.trim();
-  const dato=document.getElementById('g-dato').value;
+  const dato=document.getElementById('g-dato').value||undefined;
   const distanse=document.getElementById('g-distanse').value;
   const maalTid=document.getElementById('g-maal-tid').value.trim();
   const prioritet=document.getElementById('g-prioritet').value;
-  const status=document.getElementById('add-goal-status');
-  if(!navn||!dato){status.textContent='⚠ Navn og dato er påkrevd';status.style.color='var(--warn)';return;}
-  status.textContent='Lagrer…';status.style.color='var(--text2)';
-  const vurdering=`Distanse: ${distanse}\nPrioritet: ${prioritet}`;
+  const notater=document.getElementById('g-notater').value.trim();
+  const statusEl=document.getElementById('add-goal-status');
+  if(!navn||(isRace&&!dato)){statusEl.textContent='⚠ '+(isRace?'Navn og dato er påkrevd':'Navn er påkrevd');statusEl.style.color='var(--warn)';return;}
+  statusEl.textContent='Lagrer…';statusEl.style.color='var(--text2)';
+  const vurderingParts=[];
+  if(isRace)vurderingParts.push(`Distanse: ${distanse}`,`Prioritet: ${prioritet}`);
+  if(notater)vurderingParts.push(notater);
+  const vurdering=vurderingParts.join('\n')||undefined;
   try{
     const r=await fetch(url+'/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({navn,dato,planlagtPuls:maalTid||undefined,vurdering})});
+      body:JSON.stringify({navn,dato,goalType,planlagtPuls:maalTid||undefined,vurdering})});
     const d=await r.json();
     if(r.ok){
-      status.textContent='✓ Lagret!';status.style.color='var(--accent)';
-      // Reset form
-      document.getElementById('g-navn').value='';
-      document.getElementById('g-dato').value='';
-      document.getElementById('g-maal-tid').value='';
+      statusEl.textContent='✓ Lagret!';statusEl.style.color='var(--accent)';
+      ['g-navn','g-dato','g-maal-tid','g-notater'].forEach(id=>{document.getElementById(id).value='';});
       await fetchGoals();
       setTimeout(()=>toggleAddGoal(),800);
-    }else{status.textContent='✗ '+(d.error||r.status);status.style.color='var(--danger)';}
-  }catch(e){status.textContent='✗ '+e.message;status.style.color='var(--danger)';}
+    }else{statusEl.textContent='✗ '+(d.error||r.status);statusEl.style.color='var(--danger)';}
+  }catch(e){statusEl.textContent='✗ '+e.message;statusEl.style.color='var(--danger)';}
 }
 
 async function markGoalDone(id){
@@ -1399,6 +1612,7 @@ async function sendPlanMelding(){
   const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført');
   const planlagt=allOkter.filter(o=>o.status==='To Do');
   const planSummaries=allOkter.filter(o=>o.navn?.startsWith('Treningsplan')).slice(0,2);
+  const recentDagbok=allOkter.filter(o=>o.type==='Dagbok').sort((a,b)=>b.dato.localeCompare(a.dato)).slice(0,14);
   const smerteArr=gjennomfort.filter(o=>o.smerte!=null).slice(-10);
   const avgSmerte=smerteArr.length?Math.round(smerteArr.reduce((a,o)=>a+o.smerte,0)/smerteArr.length*10)/10:null;
   const weekVol=computeWeeklyVolume();
@@ -1434,7 +1648,9 @@ async function sendPlanMelding(){
     .join('\n');
   const kontekstFull=treningskontekst||localStorage.getItem('treningskontekst')||'';
 
-  const systemCtx=`Du er personlig trener til Arnar. Maks HR: 199 bpm.
+  const dagbokCtx=recentDagbok.map(e=>`${e.dato}: [${e.navn.split(':')[0]}] ${e.vurdering||e.navn}${e.smerte!=null?' (smerte: '+e.smerte+'/10)':''}`).join('\n');
+
+  const systemCtx=`Du er personlig trener til Arnar. Maks HR: ${MAX_HR} bpm.
 Soner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.
 I dag: ${today}. Fase: ${faseNavn}.
 ${kontekstFull?`TRENINGSKONTEKST:\n${kontekstFull}\n`:''}
@@ -1456,6 +1672,7 @@ ${calLines||'(ingen)'}
 
 SISTE 30 GJENNOMFØRTE ØKTER:
 ${oktLines||'(ingen)'}
+${dagbokCtx?`\nDAGBOK / HELSE-LOG (siste 14 dager):\n${dagbokCtx}`:''}
 ${planSumLines?`\nTIDLIGERE PLANER:\n${planSumLines}`:''}
 
 Når du lager en plan, output ALLTID et JSON-blokk slik:
@@ -1592,8 +1809,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadSettings();
 loadCalSettings();
+loadProfilFields();
 loadPrinsipper();
 loadKontekst();
+renderZones();
 fetchOkter().then(()=>fetchGoals());
 </script>
 </body>

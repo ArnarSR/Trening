@@ -106,7 +106,10 @@ export default {
       // GET /api/goals
       if (path === '/api/goals' && request.method === 'GET') {
         const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
-          filter: { property: 'Type', select: { equals: 'Race' } },
+          filter: { or: [
+            { property: 'Type', select: { equals: 'Race' } },
+            { property: 'Type', select: { equals: 'Mål' } },
+          ]},
           sorts: [{ property: 'Dato', direction: 'ascending' }],
           page_size: 50,
         });
@@ -117,15 +120,34 @@ export default {
       // POST /api/goals
       if (path === '/api/goals' && request.method === 'POST') {
         const body = await request.json();
+        const goalType = body.goalType || 'Race';
+        const icon = goalType === 'Race' ? '🏁' : '🎯';
         const props = {
-          'Navn':   { title: [{ text: { content: body.navn || 'Nytt løp' } }] },
-          'Dato':   { date: { start: body.dato } },
-          'Type':   { select: { name: 'Race' } },
+          'Navn':   { title: [{ text: { content: body.navn || 'Nytt mål' } }] },
           'Status': { select: { name: 'To Do' } },
+          'Type':   { select: { name: goalType } },
         };
+        if (body.dato)        props['Dato']          = { date: { start: body.dato } };
         if (body.planlagtPuls) props['Planlagt puls'] = { rich_text: [{ text: { content: body.planlagtPuls } }] };
         if (body.vurdering)   props['Vurdering']     = { rich_text: [{ text: { content: body.vurdering } }] };
-        const createBody = { parent: { database_id: DB_ID }, properties: props, icon: { type: 'emoji', emoji: '🏁' } };
+        const createBody = { parent: { database_id: DB_ID }, properties: props, icon: { type: 'emoji', emoji: icon } };
+        const res  = await notionRequest(env, 'POST', '/pages', createBody);
+        const data = await res.json();
+        return json({ ok: true, id: data.id });
+      }
+
+      // POST /api/dagbok
+      if (path === '/api/dagbok' && request.method === 'POST') {
+        const body = await request.json();
+        const props = {
+          'Navn':   { title: [{ text: { content: body.navn || 'Dagboknote' } }] },
+          'Dato':   { date: { start: body.dato } },
+          'Type':   { select: { name: 'Dagbok' } },
+          'Status': { select: { name: 'Gjennomført' } },
+        };
+        if (body.vurdering) props['Vurdering'] = { rich_text: [{ text: { content: body.vurdering } }] };
+        if (body.smerte != null) props['Smerte 0-10'] = { number: body.smerte };
+        const createBody = { parent: { database_id: DB_ID }, properties: props, icon: { type: 'emoji', emoji: body.icon || '📝' } };
         const res  = await notionRequest(env, 'POST', '/pages', createBody);
         const data = await res.json();
         return json({ ok: true, id: data.id });

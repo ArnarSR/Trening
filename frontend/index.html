@@ -425,7 +425,7 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   <div class="settings-section">
     <div class="settings-title">Google Kalender</div>
     <div class="settings-card">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Kobler planlagte økter til Google Kalender. Krev at du setter GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET og GOOGLE_REFRESH_TOKEN som wrangler secrets.</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Kobler planlagte økter til Google Kalender via tjenestekonto. Lim inn kalender-ID fra Kalender-innstillinger → Integrer kalender.</div>
       <div class="setting-row">
         <span class="setting-label">Kalender-ID</span>
         <input type="text" class="setting-input" id="s-cal-id" placeholder="primary" oninput="saveCalSettings()">
@@ -436,17 +436,13 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
         <span id="cal-test-result" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
       </div>
       <details style="margin-top:12px;">
-        <summary style="font-size:11px;color:var(--text3);cursor:pointer;">Slik setter du opp Google OAuth</summary>
+        <summary style="font-size:11px;color:var(--text3);cursor:pointer;">Slik finner du kalender-ID</summary>
         <div style="font-size:11px;color:var(--text2);line-height:1.8;margin-top:8px;font-family:var(--mono);">
-          1. Google Cloud Console → nytt prosjekt → aktiver Calendar API<br>
-          2. OAuth-legitimasjon → Desktop-app → noter client_id og client_secret<br>
-          3. Besøk auth-URL (bytt ut CLIENT_ID):<br>
-          <div style="background:var(--bg3);border-radius:6px;padding:8px;margin:6px 0;word-break:break-all;font-size:10px;">https://accounts.google.com/o/oauth2/v2/auth?client_id=CLIENT_ID&amp;redirect_uri=urn:ietf:wg:oauth:2.0:oob&amp;scope=https://www.googleapis.com/auth/calendar&amp;response_type=code&amp;access_type=offline&amp;prompt=consent</div>
-          4. Bytt inn koden:<br>
-          <div style="background:var(--bg3);border-radius:6px;padding:8px;margin:6px 0;font-size:10px;">curl -d "code=KOD&amp;client_id=ID&amp;client_secret=SECRET&amp;redirect_uri=urn:ietf:wg:oauth:2.0:oob&amp;grant_type=authorization_code" https://oauth2.googleapis.com/token</div>
-          5. wrangler secret put GOOGLE_CLIENT_ID<br>
-          &nbsp;&nbsp;&nbsp;wrangler secret put GOOGLE_CLIENT_SECRET<br>
-          &nbsp;&nbsp;&nbsp;wrangler secret put GOOGLE_REFRESH_TOKEN
+          1. Gå til Google Kalender → ⚙️ Innstillinger<br>
+          2. Klikk kalenderen din i venstre sidefelt<br>
+          3. Scroll ned til <strong>Integrer kalender</strong><br>
+          4. Kopier <strong>Kalender-ID</strong> (slutter på @group.calendar.google.com)<br>
+          5. Lim inn i feltet over og klikk Test kalender
         </div>
       </details>
     </div>

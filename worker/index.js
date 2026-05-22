@@ -109,15 +109,14 @@ export default {
 
 async function syncStrava(env) {
   // Refresh access token
+  const form = new FormData();
+  form.append('client_id', env.STRAVA_CLIENT_ID.trim());
+  form.append('client_secret', env.STRAVA_CLIENT_SECRET.trim());
+  form.append('refresh_token', env.STRAVA_REFRESH_TOKEN.trim());
+  form.append('grant_type', 'refresh_token');
   const tokenRes = await fetch('https://www.strava.com/oauth/token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: env.STRAVA_CLIENT_ID,
-      client_secret: env.STRAVA_CLIENT_SECRET,
-      refresh_token: env.STRAVA_REFRESH_TOKEN,
-      grant_type: 'refresh_token',
-    }),
+    body: form,
   });
   const tokenData = await tokenRes.json();
   if (!tokenData.access_token) {
@@ -151,8 +150,10 @@ async function syncStrava(env) {
   }
 
   let synced = 0, created = 0;
+  const MAX_WRITES = 40; // Cloudflare free tier: 50 subrequest limit
 
   for (const activity of activities) {
+    if (synced + created >= MAX_WRITES) break;
     const date = activity.start_date_local?.split('T')[0];
     if (!date) continue;
 
@@ -196,7 +197,7 @@ async function syncStrava(env) {
     }
   }
 
-  return json({ synced, created, total: activities.length });
+  return json({ synced, created, total: activities.length, capped: synced + created >= MAX_WRITES });
 }
 
 async function queryNotionSince(env, since) {

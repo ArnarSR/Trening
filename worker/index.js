@@ -172,7 +172,7 @@ async function syncStrava(env) {
       if (maxHR !== null) props['Faktisk maks HR'] = { number: maxHR };
       if (duration !== null) props['Varighet (min)'] = { number: duration };
       if (pace) props['Pace'] = { rich_text: [{ text: { content: pace } }] };
-      if (sport) props['Type'] = { select: { name: sport.type } };
+      if (sport) props['Sport'] = { select: { name: sport.type } };
 
       const patchBody = { properties: props };
       if (sport) patchBody.icon = { type: 'emoji', emoji: sport.icon };
@@ -187,7 +187,7 @@ async function syncStrava(env) {
       if (maxHR !== null) props['Faktisk maks HR'] = { number: maxHR };
       if (duration !== null) props['Varighet (min)'] = { number: duration };
       if (pace) props['Pace'] = { rich_text: [{ text: { content: pace } }] };
-      if (sport) props['Type'] = { select: { name: sport.type } };
+      if (sport) props['Sport'] = { select: { name: sport.type } };
 
       const createBody = { parent: { database_id: DB_ID }, properties: props };
       if (sport) createBody.icon = { type: 'emoji', emoji: sport.icon };
@@ -251,6 +251,7 @@ function mapPage(page) {
     id: page.id,
     navn: p['Navn']?.title?.[0]?.plain_text || '',
     type: p['Type']?.select?.name || '',
+    sport: p['Sport']?.select?.name || '',
     status: p['Status']?.select?.name || '',
     fase: p['Fase']?.select?.name || '',
     dato: p['Dato']?.date?.start || '',
@@ -270,6 +271,7 @@ function buildNotionProps(body) {
   const props = {};
   if (body.status)   props['Status']   = { select: { name: body.status } };
   if (body.type)     props['Type']     = { select: { name: body.type } };
+  if (body.sport)    props['Sport']    = { select: { name: body.sport } };
   if (body.fase)     props['Fase']     = { select: { name: body.fase } };
   if (body.dato)     props['Dato']     = { date: { start: body.dato } };
   if (body.vurdering !== undefined)

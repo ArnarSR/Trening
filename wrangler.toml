@@ -1,7 +1,0 @@
-name = "trening-arnar"
-main = "worker.js"
-compatibility_date = "2024-01-01"
-
-# Secrets settes via CLI eller dashboard — aldri her:
-# wrangler secret put NOTION_TOKEN
-# wrangler secret put CLAUDE_API_KEY

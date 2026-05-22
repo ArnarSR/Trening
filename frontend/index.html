@@ -155,6 +155,13 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 .pb-user{background:var(--accent);color:#0f0f0f;border-color:var(--accent);border-radius:14px 14px 4px 14px;font-weight:500;}
 .pb-ai{background:var(--bg3);color:var(--text);border-color:var(--border-hi);border-radius:14px 14px 14px 4px;}
 .plan-empty{text-align:center;padding:30px 16px;color:var(--text3);font-size:12px;line-height:1.7;}
+.plan-preview{background:var(--bg2);border:0.5px solid rgba(200,240,96,0.25);border-radius:var(--rlg);padding:14px 16px;margin-top:10px;}
+.plan-preview-title{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}
+.plan-preview-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px;}
+.plan-preview-row:last-of-type{border-bottom:none;}
+.plan-preview-date{font-family:var(--mono);font-size:11px;color:var(--text2);width:60px;flex-shrink:0;}
+.plan-preview-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.plan-preview-meta{font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -342,7 +349,10 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 
 <!-- ══ PLAN ══ -->
 <div id="view-plan" class="view">
-  <div class="page-header"><div class="page-title">Treningsplan</div><div class="page-sub">Diskuter og bygg planen din med Claude</div></div>
+  <div class="page-header">
+    <div class="page-title">Treningsplan</div>
+    <div class="page-sub" id="plan-cal-status">Diskuter og bygg planen din med Claude</div>
+  </div>
   <div id="plan-chat" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;min-height:120px;"></div>
   <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:12px;">
     <textarea class="form-input" id="plan-input" style="width:100%;min-height:72px;resize:none;font-family:var(--sans);margin-bottom:8px;border:none;background:transparent;padding:0;" placeholder="Hva skal fokuset være neste uke? Lag en 4-ukers plan mot Sommernatt…"></textarea>
@@ -375,14 +385,18 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   <div class="settings-section">
     <div class="settings-title">Fase-prinsipper</div>
     <div class="settings-card">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Skriv inn prinsippene for nåværende fase. Vises øverst i I dag-visningen.</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Lagres i Notion og brukes av Plan-assistenten som treningskontekst.</div>
       <div class="form-field" style="margin-bottom:8px;">
         <label class="form-label">Fase-navn</label>
-        <input type="text" class="setting-input" id="s-fase-navn" placeholder="Fase 0 — Aktiv restitusjon" oninput="savePrinsipper()">
+        <input type="text" class="setting-input" id="s-fase-navn" placeholder="Fase 0 — Aktiv restitusjon" oninput="onPrinsipperInput()">
       </div>
-      <div class="form-field">
+      <div class="form-field" style="margin-bottom:10px;">
         <label class="form-label">Prinsipper</label>
-        <textarea class="setting-input" id="s-prinsipper" rows="6" placeholder="• Maks 3 løpeøkter per uke&#10;• All løping i S1–S2&#10;• Prioriter søvn og restitusjon" oninput="savePrinsipper()" style="resize:vertical;min-height:120px;font-family:var(--sans);font-size:12px;line-height:1.6;"></textarea>
+        <textarea class="setting-input" id="s-prinsipper" rows="6" placeholder="• Maks 3 løpeøkter per uke&#10;• All løping i S1–S2&#10;• Prioriter søvn og restitusjon" oninput="onPrinsipperInput()" style="resize:vertical;min-height:120px;font-family:var(--sans);font-size:12px;line-height:1.6;"></textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-sm btn-accent" id="prinsipper-save-btn" onclick="savePrinsipperToNotion()">Lagre til Notion</button>
+        <span id="prinsipper-save-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
       </div>
     </div>
   </div>
@@ -406,6 +420,35 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
         <div style="color:var(--warn);">S4</div><div style="color:var(--text2);">163–178</div>
         <div style="color:var(--danger);">S5</div><div style="color:var(--text2);">179–199</div>
       </div>
+    </div>
+  </div>
+  <div class="settings-section">
+    <div class="settings-title">Google Kalender</div>
+    <div class="settings-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Kobler planlagte økter til Google Kalender. Krev at du setter GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET og GOOGLE_REFRESH_TOKEN som wrangler secrets.</div>
+      <div class="setting-row">
+        <span class="setting-label">Kalender-ID</span>
+        <input type="text" class="setting-input" id="s-cal-id" placeholder="primary" oninput="saveCalSettings()">
+      </div>
+      <div class="sep"></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="testCalendar()">Test kalender</button>
+        <span id="cal-test-result" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+      </div>
+      <details style="margin-top:12px;">
+        <summary style="font-size:11px;color:var(--text3);cursor:pointer;">Slik setter du opp Google OAuth</summary>
+        <div style="font-size:11px;color:var(--text2);line-height:1.8;margin-top:8px;font-family:var(--mono);">
+          1. Google Cloud Console → nytt prosjekt → aktiver Calendar API<br>
+          2. OAuth-legitimasjon → Desktop-app → noter client_id og client_secret<br>
+          3. Besøk auth-URL (bytt ut CLIENT_ID):<br>
+          <div style="background:var(--bg3);border-radius:6px;padding:8px;margin:6px 0;word-break:break-all;font-size:10px;">https://accounts.google.com/o/oauth2/v2/auth?client_id=CLIENT_ID&amp;redirect_uri=urn:ietf:wg:oauth:2.0:oob&amp;scope=https://www.googleapis.com/auth/calendar&amp;response_type=code&amp;access_type=offline&amp;prompt=consent</div>
+          4. Bytt inn koden:<br>
+          <div style="background:var(--bg3);border-radius:6px;padding:8px;margin:6px 0;font-size:10px;">curl -d "code=KOD&amp;client_id=ID&amp;client_secret=SECRET&amp;redirect_uri=urn:ietf:wg:oauth:2.0:oob&amp;grant_type=authorization_code" https://oauth2.googleapis.com/token</div>
+          5. wrangler secret put GOOGLE_CLIENT_ID<br>
+          &nbsp;&nbsp;&nbsp;wrangler secret put GOOGLE_CLIENT_SECRET<br>
+          &nbsp;&nbsp;&nbsp;wrangler secret put GOOGLE_REFRESH_TOKEN
+        </div>
+      </details>
     </div>
   </div>
   <div class="settings-section">
@@ -461,19 +504,92 @@ function loadSettings(){
   try{document.getElementById('s-worker-url').value=localStorage.getItem('worker_url')||'';}catch(e){}
   updateDots();
 }
-function savePrinsipper(){
+function saveCalSettings(){
+  try{localStorage.setItem('cal_id',document.getElementById('s-cal-id').value.trim()||'primary');}catch(e){}
+}
+function loadCalSettings(){
+  try{document.getElementById('s-cal-id').value=localStorage.getItem('cal_id')||'';}catch(e){}
+}
+function getCalId(){try{return localStorage.getItem('cal_id')||'primary';}catch(e){return'primary';}}
+
+async function testCalendar(){
+  const url=getWorkerUrl();const res=document.getElementById('cal-test-result');
+  if(!url){res.textContent='⚠ Ingen Worker URL';res.style.color='var(--warn)';return;}
+  res.textContent='Tester…';
+  const today=getTodayDate();
+  const d=new Date(today);d.setDate(d.getDate()+3);
+  const to=d.toISOString().split('T')[0];
+  try{
+    const r=await fetch(`${url}/api/calendar?from=${today}&to=${to}`);
+    const data=await r.json();
+    if(r.ok){res.textContent=`✓ ${data.events?.length||0} hendelser funnet`;res.style.color='var(--accent)';}
+    else{res.textContent='✗ '+(data.error||r.status);res.style.color='var(--danger)';}
+  }catch(e){res.textContent='✗ '+e.message;res.style.color='var(--danger)';}
+}
+
+// Prinsipper — Notion-backed
+function onPrinsipperInput(){
+  // Update localStorage live for rendering, but don't auto-save to Notion
   try{
     localStorage.setItem('fase_navn',document.getElementById('s-fase-navn').value);
     localStorage.setItem('fase_prinsipper',document.getElementById('s-prinsipper').value);
   }catch(e){}
   renderPrinsipper();
+  document.getElementById('prinsipper-save-status').textContent='';
 }
+
+async function savePrinsipperToNotion(){
+  const url=getWorkerUrl();
+  const btn=document.getElementById('prinsipper-save-btn');
+  const status=document.getElementById('prinsipper-save-status');
+  const faseNavn=document.getElementById('s-fase-navn').value;
+  const tekst=document.getElementById('s-prinsipper').value;
+  // Always save to localStorage
+  try{localStorage.setItem('fase_navn',faseNavn);localStorage.setItem('fase_prinsipper',tekst);}catch(e){}
+  renderPrinsipper();
+  if(!url){status.textContent='⚠ Sett Worker URL';status.style.color='var(--warn)';return;}
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
+  const combined=(faseNavn?`Fase: ${faseNavn}\n\n`:'')+tekst;
+  try{
+    const r=await fetch(url+'/api/prinsipper',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tekst:combined})});
+    if(r.ok){status.textContent='✓ Lagret til Notion';status.style.color='var(--accent)';}
+    else{const e=await r.json();status.textContent='✗ '+(e.error||r.status);status.style.color='var(--danger)';}
+  }catch(e){status.textContent='✗ '+e.message;status.style.color='var(--danger)';}
+  btn.disabled=false;btn.textContent='Lagre til Notion';
+}
+
+async function loadPrinsipperFromNotion(){
+  const url=getWorkerUrl();
+  if(!url)return;
+  try{
+    const r=await fetch(url+'/api/prinsipper');
+    const d=await r.json();
+    if(r.ok&&d.tekst){
+      // Parse back: "Fase: X\n\nPrinsipper" format
+      const tekst=d.tekst;
+      const faseMatch=tekst.match(/^Fase: (.+)\n\n([\s\S]*)$/);
+      if(faseMatch){
+        localStorage.setItem('fase_navn',faseMatch[1]);
+        localStorage.setItem('fase_prinsipper',faseMatch[2]);
+        document.getElementById('s-fase-navn').value=faseMatch[1];
+        document.getElementById('s-prinsipper').value=faseMatch[2];
+      }else{
+        localStorage.setItem('fase_prinsipper',tekst);
+        document.getElementById('s-prinsipper').value=tekst;
+      }
+      renderPrinsipper();
+    }
+  }catch(e){}
+}
+
 function loadPrinsipper(){
   try{
     document.getElementById('s-fase-navn').value=localStorage.getItem('fase_navn')||'';
     document.getElementById('s-prinsipper').value=localStorage.getItem('fase_prinsipper')||'';
   }catch(e){}
   renderPrinsipper();
+  // Sync from Notion in background
+  loadPrinsipperFromNotion();
 }
 function renderPrinsipper(){
   const navn=localStorage.getItem('fase_navn')||'';
@@ -586,6 +702,7 @@ function showView(name){
   const si=document.querySelector(`.nav-item[onclick="showView('${name}')"]`);if(si)si.classList.add('active');
   const bi=document.getElementById('bn-'+name);if(bi)bi.classList.add('active');
   document.querySelector('.main').scrollTo(0,0);
+  if(name==='plan')loadPlanContext();
 }
 
 // ── Fetch økter ───────────────────────────────────────────────────────────────
@@ -952,9 +1069,11 @@ async function markAsComplete(oktId){
 }
 
 // ── Plan chat ─────────────────────────────────────────────────────────────────
+let planCalendarEvents = [];  // cached from GCal
+let planPrinsipper = '';      // cached from Notion
+
 function renderPlanBubble(role, text){
   const chat=document.getElementById('plan-chat');
-  // Remove empty-state placeholder if present
   const emp=chat.querySelector('.plan-empty');if(emp)emp.remove();
   const wrap=document.createElement('div');
   wrap.className=role==='user'?'plan-bubble-user':'plan-bubble-ai';
@@ -964,6 +1083,7 @@ function renderPlanBubble(role, text){
   wrap.appendChild(bubble);
   chat.appendChild(wrap);
   chat.scrollTop=chat.scrollHeight;
+  return wrap;
 }
 
 function showPlanEmpty(){
@@ -971,9 +1091,63 @@ function showPlanEmpty(){
   if(!chat.querySelector('.plan-empty')){
     const div=document.createElement('div');
     div.className='plan-empty';
-    div.innerHTML='💬 Still spørsmål om treningen din.<br>Bygg en plan, diskuter faser, analyser progresjon.';
+    div.innerHTML='💬 Still spørsmål om treningen din.<br>Bygg en uke-plan, diskuter faser, analyser progresjon.';
     chat.appendChild(div);
   }
+}
+
+// Called when switching to Plan view
+async function loadPlanContext(){
+  const url=getWorkerUrl();
+  if(!url)return;
+  // Fetch calendar events for next 7 days
+  const today=getTodayDate();
+  const end=new Date(today);end.setDate(end.getDate()+7);
+  const endStr=end.toISOString().split('T')[0];
+  const statusEl=document.getElementById('plan-cal-status');
+  try{
+    const r=await fetch(`${url}/api/calendar?from=${today}&to=${endStr}`);
+    const d=await r.json();
+    if(r.ok){
+      planCalendarEvents=d.events||[];
+      const planlagt=allOkter.filter(o=>o.status==='To Do').length;
+      statusEl.textContent=`${planCalendarEvents.length} i kalender · ${planlagt} planlagt i Notion · neste 7 dager`;
+    }
+  }catch(e){statusEl.textContent='Diskuter og bygg planen din med Claude';}
+  // Refresh principles from Notion
+  try{
+    const r=await fetch(url+'/api/prinsipper');
+    const d=await r.json();
+    if(r.ok&&d.tekst)planPrinsipper=d.tekst;
+    else planPrinsipper=localStorage.getItem('fase_prinsipper')||'';
+  }catch(e){planPrinsipper=localStorage.getItem('fase_prinsipper')||'';}
+}
+
+function computeWeeklyVolume(){
+  // Returns last 8 weeks of volume in minutes
+  const weeks={};
+  allOkter.filter(o=>o.status==='Gjennomført'&&o.dato&&o.varighet).forEach(o=>{
+    const d=new Date(o.dato+'T12:00:00');
+    const week=getWeekKey(d);
+    weeks[week]=(weeks[week]||0)+o.varighet;
+  });
+  const keys=Object.keys(weeks).sort().slice(-8);
+  return keys.map(k=>weeks[k]);
+}
+
+function getWeekKey(d){
+  const jan1=new Date(d.getFullYear(),0,1);
+  const week=Math.ceil(((d-jan1)/86400000+jan1.getDay()+1)/7);
+  return `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
+}
+
+function computeZoneDist(){
+  const zones={S1:0,S2:0,S3:0,S4:0,S5:0};
+  const done=allOkter.filter(o=>o.status==='Gjennomført'&&o.faktiskSnittHR&&o.varighet);
+  if(!done.length)return null;
+  done.forEach(o=>{const z=getZone(o.faktiskSnittHR);zones[z.n]=(zones[z.n]||0)+o.varighet;});
+  const tot=Object.values(zones).reduce((a,b)=>a+b,0);
+  return Object.entries(zones).map(([n,v])=>`${n}: ${Math.round(v/tot*100)}%`).join(', ');
 }
 
 async function sendPlanMelding(){
@@ -990,7 +1164,6 @@ async function sendPlanMelding(){
   const btn=document.getElementById('plan-send-btn');
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
 
-  // Loading bubble
   const chat=document.getElementById('plan-chat');
   const loadWrap=document.createElement('div');
   loadWrap.className='plan-bubble-ai';
@@ -998,26 +1171,70 @@ async function sendPlanMelding(){
   chat.appendChild(loadWrap);
   chat.scrollTop=chat.scrollHeight;
 
-  // Build context
+  // ── Rich context ──────────────────────────────────────────────────────────
   const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført');
-  const oktSummary=gjennomfort.slice(0,20).map(o=>
-    `${o.dato||'?'}: ${o.navn} — ${o.sport||o.type||'?'}, HR ${o.faktiskSnittHR||'?'}/${o.faktiskMaksHR||'?'}, ${o.varighet||'?'} min, Type: ${o.type||'?'}`
-  ).join('\n');
-  const prinsipper=localStorage.getItem('fase_prinsipper')||'';
+  const planlagt=allOkter.filter(o=>o.status==='To Do');
+  const planSummaries=allOkter.filter(o=>o.navn?.startsWith('Treningsplan')).slice(0,2);
+  const smerteArr=gjennomfort.filter(o=>o.smerte!=null).slice(-10);
+  const avgSmerte=smerteArr.length?Math.round(smerteArr.reduce((a,o)=>a+o.smerte,0)/smerteArr.length*10)/10:null;
+  const weekVol=computeWeeklyVolume();
+  const avgWeekMin=weekVol.length?Math.round(weekVol.reduce((a,b)=>a+b,0)/weekVol.length):null;
+  const zoneDist=computeZoneDist();
   const faseNavn=localStorage.getItem('fase_navn')||'Fase 0';
+  const today=getTodayDate();
 
-  const historyLines=planHistory.slice(0,-1).map(m=>(m.role==='user'?'Arnar':'Trener')+': '+m.content).join('\n\n');
+  const oktLines=gjennomfort.slice(-30).map(o=>
+    [o.dato,o.sport||o.type||'?',`HR ${o.faktiskSnittHR||'?'}/${o.faktiskMaksHR||'?'}`,
+     o.varighet?o.varighet+'min':'',o.pace||'',o.type||'',o.smerte!=null?`smerte:${o.smerte}`:'',
+     o.vurdering?`"${o.vurdering.slice(0,60)}"`:''
+    ].filter(Boolean).join(' · ')
+  ).join('\n');
+
+  const planlagtLines=planlagt.slice(0,14).map(o=>
+    `${o.dato||'?'}: ${o.navn} — ${o.type||'?'}${o.varighet?' ('+o.varighet+' min)':''}`
+  ).join('\n');
+
+  const calLines=planCalendarEvents.map(e=>`${e.date}: ${e.title}`).join('\n');
+
+  const planSumLines=planSummaries.map(p=>`[${p.dato||'?'}] ${(p.vurdering||'').slice(0,200)}`).join('\n\n');
+
+  const prinsipper=planPrinsipper||localStorage.getItem('fase_prinsipper')||'';
 
   const systemCtx=`Du er personlig trener til Arnar (33 år, pappaperm, hofte/kne-rehab). Maks HR: 199 bpm.
 Soner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.
-Nåværende fase: ${faseNavn}${prinsipper?`\nFase-prinsipper:\n${prinsipper}`:''}
-
-Siste gjennomførte økter:
-${oktSummary||'(ingen ennå)'}
-
+I dag: ${today}. Fase: ${faseNavn}.
+${prinsipper?`Prinsipper:\n${prinsipper}\n`:''}
 Mål: Sommernattsløpet 10k 20. juni 2026, sub-1:45 Oslo HM 12. september 2026.
-Svar på norsk, konkret og motiverende. Gi strukturerte svar med linjeskift.`;
 
+STATISTIKK:
+- Gjennomsnittlig ukesvolum (siste 8 uker): ${avgWeekMin!=null?avgWeekMin+' min/uke':'ukjent'}
+- Sonedistribusjon: ${zoneDist||'ukjent'}
+- Smerte-snitt (siste 10): ${avgSmerte!=null?avgSmerte+'/10':'ikke registrert'}
+
+ALLEREDE PLANLAGT I NOTION (To Do):
+${planlagtLines||'(ingen)'}
+
+ALLEREDE I GOOGLE KALENDER (neste 7 dager):
+${calLines||'(ingen)'}
+
+SISTE 30 GJENNOMFØRTE ØKTER:
+${oktLines||'(ingen)'}
+${planSumLines?`\nTIDLIGERE PLANER:\n${planSumLines}`:''}
+
+Når du lager en plan, output ALLTID et JSON-blokk slik:
+\`\`\`json
+{ "sessions": [
+    { "dato": "YYYY-MM-DD", "navn": "Navn på økt", "type": "Sone 2",
+      "sport": "🏃 Løp", "varighet": 45, "planlagtPuls": "120-145",
+      "beskrivelse": "Kort instruksjon" }
+  ],
+  "summary": "Begrunnelse for planen"
+}
+\`\`\`
+Inkluder kun neste 7 dager. Ikke dupliser datoer som allerede er planlagt. For analyse/diskusjon uten å lage plan, svar normalt uten JSON.
+Svar på norsk, konkret og strukturert.`;
+
+  const historyLines=planHistory.slice(0,-1).map(m=>(m.role==='user'?'Arnar':'Trener')+': '+m.content).join('\n\n');
   const fullPrompt=systemCtx+(historyLines?`\n\nTidligere samtale:\n${historyLines}`:'')+`\n\nArnar: ${msg}\nTrener:`;
 
   try{
@@ -1029,6 +1246,12 @@ Svar på norsk, konkret og motiverende. Gi strukturerte svar med linjeskift.`;
     planHistory.push({role:'assistant',content:text});
     lastPlanResponse=text;
     document.getElementById('plan-save-btn').style.display='inline-flex';
+
+    // Parse JSON plan from response
+    const sessions=parsePlanFromResponse(text);
+    if(sessions&&sessions.length){
+      renderPlanPreview(sessions);
+    }
   }catch(e){
     chat.removeChild(loadWrap);
     renderPlanBubble('assistant','⚠ Feil: '+e.message);
@@ -1036,8 +1259,64 @@ Svar på norsk, konkret og motiverende. Gi strukturerte svar med linjeskift.`;
   btn.disabled=false;btn.textContent='Send';
 }
 
+function parsePlanFromResponse(text){
+  const match=text.match(/```json\s*([\s\S]*?)```/);
+  if(!match)return null;
+  try{
+    const parsed=JSON.parse(match[1].trim());
+    if(Array.isArray(parsed.sessions)&&parsed.sessions.length){
+      // Validate each session has at least dato + navn
+      return parsed.sessions.filter(s=>s.dato&&s.navn);
+    }
+  }catch(e){}
+  return null;
+}
+
+function renderPlanPreview(sessions){
+  const chat=document.getElementById('plan-chat');
+  const preview=document.createElement('div');
+  preview.className='plan-preview';
+  const rows=sessions.map(s=>{
+    const dato=s.dato?formatDato(s.dato):'?';
+    const meta=[s.varighet?s.varighet+' min':'',s.type||''].filter(Boolean).join(' · ');
+    const sport=s.sport?s.sport.split(' ')[0]:'';
+    return `<div class="plan-preview-row">
+      <span class="plan-preview-date">${dato}</span>
+      <span class="plan-preview-name">${sport?sport+' ':''}<strong>${esc(s.navn)}</strong></span>
+      <span class="plan-preview-meta">${esc(meta)}</span>
+    </div>`;
+  }).join('');
+  preview.innerHTML=`<div class="plan-preview-title">📅 ${sessions.length} planlagte økter</div>${rows}
+    <div style="margin-top:10px;">
+      <button class="btn btn-accent btn-sm" id="plan-create-btn" onclick="createPlanSessions(window._pendingSessions)" style="width:100%;justify-content:center;">Opprett i Notion + Kalender →</button>
+    </div>`;
+  window._pendingSessions=sessions;
+  chat.appendChild(preview);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+async function createPlanSessions(sessions){
+  if(!sessions||!sessions.length)return;
+  const url=getWorkerUrl();
+  if(!url){alert('Sett Worker URL');showView('innstillinger');return;}
+  const btn=document.getElementById('plan-create-btn');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Oppretter…';}
+  try{
+    const r=await fetch(url+'/api/plan/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessions})});
+    const d=await r.json();
+    if(r.ok){
+      if(btn){btn.textContent=`✓ ${d.created} økt${d.created!==1?'er':''} opprettet`;btn.style.cssText='background:rgba(200,240,96,0.12);color:var(--accent);border-color:var(--accent);width:100%;justify-content:center;';}
+      await fetchOkter();
+      await loadPlanContext(); // refresh calendar context
+    }else{
+      if(btn){btn.textContent='✗ '+(d.error||r.status);btn.disabled=false;}
+    }
+  }catch(e){if(btn){btn.textContent='✗ '+e.message;btn.disabled=false;}}
+}
+
 function clearPlanChat(){
   planHistory=[];lastPlanResponse='';
+  window._pendingSessions=null;
   const chat=document.getElementById('plan-chat');
   chat.innerHTML='';
   document.getElementById('plan-save-btn').style.display='none';
@@ -1054,20 +1333,15 @@ async function savePlanToNotion(){
   try{
     const r=await fetch(url+'/api/okter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       navn:'Treningsplan '+today,
+      dato:today,
       vurdering:lastPlanResponse,
     })});
-    if(r.ok){
-      btn.textContent='✓ Lagret';
-      btn.style.cssText='color:var(--accent);border-color:var(--accent);background:rgba(200,240,96,0.08);';
-    }else{
-      const e=await r.json();
-      btn.textContent='✗ '+(e.error||r.status);
-      btn.disabled=false;
-    }
+    if(r.ok){btn.textContent='✓ Lagret';btn.style.cssText='color:var(--accent);border-color:var(--accent);background:rgba(200,240,96,0.08);';}
+    else{const e=await r.json();btn.textContent='✗ '+(e.error||r.status);btn.disabled=false;}
   }catch(e){btn.textContent='✗ '+e.message;btn.disabled=false;}
 }
 
-// ── Plan chat Enter key support ───────────────────────────────────────────────
+// ── Plan chat keyboard + init ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
   const planInput=document.getElementById('plan-input');
   if(planInput){
@@ -1080,6 +1354,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadSettings();
+loadCalSettings();
 loadPrinsipper();
 fetchOkter();
 </script>

@@ -238,7 +238,7 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   </div>
 
   <div class="sec-head">
-    <div class="sec-title">Øktlogg</div>
+    <div class="sec-title">Øktlogg — <span id="okt-count">—</span> gjennomført</div>
     <button class="btn btn-sm" onclick="fetchOkter()"><span class="spinner" id="load-spin" style="display:none"></span> Oppdater</button>
   </div>
 
@@ -480,8 +480,10 @@ async function fetchOkter(){
 function renderOkter(){
   const list=document.getElementById('okt-list');
   if(!allOkter.length){renderEmpty('Ingen økter funnet i Notion');return;}
+  const gjennomfort=allOkter.filter(o=>o.status==='Gjennomført');
+  if(!gjennomfort.length){renderEmpty('Ingen gjennomførte økter ennå');return;}
   list.innerHTML='';
-  allOkter.forEach(okt=>{
+  gjennomfort.forEach(okt=>{
     const typeClass=TYPE_MAP[okt.type]||'type-s2';
     const statusClass=STATUS_MAP[okt.status]||'status-todo';
     const statusIcon=STATUS_ICON[okt.status]||'·';
@@ -512,6 +514,7 @@ function renderEmpty(msg){
 function updateStats(){
   const done=allOkter.filter(o=>o.status==='Gjennomført').length;
   document.getElementById('s-done').textContent=done;
+  const countEl=document.getElementById('okt-count');if(countEl)countEl.textContent=done;
   const race=allOkter.find(o=>o.type==='Race'&&o.navn?.includes('23:17'));
   document.getElementById('s-pr').textContent=race?'23:17':'—';
   document.getElementById('hero-pr').textContent='23:17';

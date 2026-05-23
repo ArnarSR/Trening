@@ -3,6 +3,36 @@ const NOTION_VERSION = '2022-06-28';
 const DB_ID = '953ee9299ea345fb8a3d77cf8237116a';
 const HELSE_DB_ID = '2e5c1e0abf4e4fd69c4c88ae89c32d5f';
 
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
+
+// System prompt for structured session analysis
+const COACH_SYSTEM_PROMPT = `\
+Du er en personlig treningscoach med doktorgrad i sportsfysiologi og bred praktisk erfaring med \
+utholdenhetsidretter. Din ekspertise dekker:
+
+• Periodisering og progressiv overbelastning — akutt:kronisk belastningsratio, superkompensasjon
+• HR-sonebasert trening (Z1–Z5): aerob base, laktatterskel, VO2max-intervaller
+• Restitusjonsfysiologi: HRV-tolkning, søvnarkitektur (dyp/REM/lett), hormonstatus
+• Rehabilitering og skadesforebygging — særlig hofte, kne og bekkenmuskulatur
+• Individualisert planlegging som vekter total livsbelastning, ikke bare treningsbelastning
+
+Retningslinjer du alltid følger:
+• Lav HRV + fragmentert søvn = reduser intensitet, uansett plan. Ingen unntak.
+• Smerte > 3 på en økt = anbefal hvile eller alternativ trening neste gang
+• Aldri anbefal to harde økter på rad uten restitusjonøkt imellom
+• Vær direkte og konkret — unngå vage fraser som "lytt til kroppen"
+
+Lengdekrav per felt — overhold disse:
+• summary: maks 2 setninger
+• loadAssessment: ett ord + én setning (f.eks. "Moderat — intensiteten var kontrollert")
+• recoveryStatus: én setning
+• nextSessionRecommendation: én konkret setning med type, varighet og intensitet
+• motivation: én setning, maks 15 ord
+
+Du svarer ALLTID med gyldig JSON og INGEN ANNEN TEKST. Nøyaktig dette formatet:
+{"summary":"...","loadAssessment":"...","recoveryStatus":"...","nextSessionRecommendation":"...","motivation":"..."}\
+`;
+
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_CAL_API   = 'https://www.googleapis.com/calendar/v3';
 
@@ -231,22 +261,74 @@ export default {
 
       // POST /api/analyse
       if (path === '/api/analyse' && request.method === 'POST') {
-        const { prompt } = await request.json();
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': env.CLAUDE_API_KEY,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-5',
-            max_tokens: 4000,
-            messages: [{ role: 'user', content: prompt }],
-          }),
+        const body = await request.json();
+        const ts = new Date().toISOString();
+        const isStructured = !!(body.okt || body.sovn || body.hrv);
+
+        if (isStructured) {
+          // Validate: require at least type or varighet on the session
+          if (!body.okt || (!body.okt.type && body.okt.varighet == null)) {
+            return json({
+              error: 'Mangler økt-data: okt.type eller okt.varighet er påkrevd',
+              fields: { okt: 'type eller varighet må være satt' },
+            }, 400);
+          }
+
+          const { okt, sovn, hrv, historikk } = body;
+
+          console.log(JSON.stringify({
+            ts, endpoint: '/api/analyse', mode: 'structured',
+            input: {
+              oktType: okt.type, oktSport: okt.sport, varighet: okt.varighet,
+              harSovn: !!sovn, harHRV: !!hrv, historikkDager: historikk?.length || 0,
+            },
+          }));
+
+          const userMessage = buildStructuredMessage(okt, sovn, hrv, historikk);
+          const rawText = await callClaude(env, {
+            system: COACH_SYSTEM_PROMPT,
+            userMessage,
+            maxTokens: 900,
+          });
+          const result = parseStructuredResponse(rawText);
+
+          console.log(JSON.stringify({
+            ts, endpoint: '/api/analyse', mode: 'structured',
+            status: result.ok ? 'ok' : 'parse_error',
+            responseLen: rawText.length,
+          }));
+
+          if (result.ok) return json(result.data);
+          // Fallback: surface raw text in summary if JSON parse failed
+          return json({
+            summary: rawText.slice(0, 500),
+            loadAssessment: '—', recoveryStatus: '—',
+            nextSessionRecommendation: '—', motivation: '—',
+          });
+        }
+
+        // Legacy free-form mode — used by all existing frontend calls
+        if (!body.prompt || typeof body.prompt !== 'string' || !body.prompt.trim()) {
+          return json({
+            error: 'Mangler prompt eller strukturert økt-data (okt, sovn, hrv)',
+          }, 400);
+        }
+
+        console.log(JSON.stringify({
+          ts, endpoint: '/api/analyse', mode: 'legacy',
+          promptLen: body.prompt.length,
+        }));
+
+        const text = await callClaude(env, {
+          userMessage: body.prompt,
+          maxTokens: 4000,
         });
-        const data = await res.json();
-        const text = data.content?.find(b => b.type === 'text')?.text || '';
+
+        console.log(JSON.stringify({
+          ts, endpoint: '/api/analyse', mode: 'legacy',
+          status: 'ok', responseLen: text.length,
+        }));
+
         return json({ text });
       }
 
@@ -700,4 +782,159 @@ function buildNotionProps(body) {
   if (body.medVogn !== undefined)
     props['Med vogn'] = { checkbox: body.medVogn };
   return props;
+}
+
+// ── Claude API helpers ────────────────────────────────────────────────────────
+
+/**
+ * Retry wrapper — retries on network failures and recoverable HTTP errors.
+ * @template T
+ * @param {() => Promise<T>} fn
+ * @param {number} maxAttempts
+ * @param {number} delayMs
+ * @returns {Promise<T>}
+ */
+async function withRetry(fn, maxAttempts = 2, delayMs = 1000) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Call the Claude API with retry on 429 / 5xx.
+ * @param {object} env - Cloudflare env bindings
+ * @param {{ system?: string, userMessage: string, maxTokens?: number }} opts
+ * @returns {Promise<string>} - Raw text response
+ */
+async function callClaude(env, { system, userMessage, maxTokens = 600 }) {
+  return withRetry(async () => {
+    const body = {
+      model: CLAUDE_MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: userMessage }],
+    };
+    if (system) body.system = system;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+    });
+
+    // Retry on rate limit or server errors
+    if (res.status === 429 || res.status >= 500) {
+      throw new Error(`Claude API returned ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || 'Claude API error');
+    return data.content?.find(b => b.type === 'text')?.text || '';
+  });
+}
+
+/**
+ * Build the structured user message from session, sleep, HRV and history.
+ * @param {object} okt  - Session data
+ * @param {object} [sovn] - Sleep data
+ * @param {object} [hrv]  - HRV data
+ * @param {object[]} [historikk] - Last 7 days
+ * @returns {string}
+ */
+function buildStructuredMessage(okt, sovn, hrv, historikk) {
+  const lines = ['## Treningsøkt'];
+
+  if (okt.navn)           lines.push(`Navn: ${okt.navn}`);
+  if (okt.type)           lines.push(`Type: ${okt.type}`);
+  if (okt.sport)          lines.push(`Sport: ${okt.sport}`);
+  if (okt.varighet)       lines.push(`Varighet: ${okt.varighet} min`);
+  if (okt.faktiskSnittHR) lines.push(`Snitt-HR: ${okt.faktiskSnittHR} bpm`);
+  if (okt.faktiskMaksHR)  lines.push(`Maks-HR: ${okt.faktiskMaksHR} bpm`);
+  if (okt.pace)           lines.push(`Pace: ${okt.pace}/km`);
+  if (okt.distanse)       lines.push(`Distanse: ${okt.distanse} km`);
+  if (okt.smerte != null) lines.push(`Smerte (0–10): ${okt.smerte}`);
+  if (okt.dato)           lines.push(`Dato: ${okt.dato}`);
+  if (okt.vurdering)      lines.push(`Notater: ${okt.vurdering}`);
+  if (okt.hrSoner?.length) {
+    lines.push('HR-soner:');
+    okt.hrSoner.forEach(z => lines.push(`  Sone ${z.zone}: ${z.minutter} min`));
+  }
+
+  if (sovn) {
+    lines.push('', '## Søvn i natt');
+    if (sovn.total    != null) lines.push(`Total: ${sovn.total} t`);
+    if (sovn.dyp      != null) lines.push(`Dyp søvn: ${sovn.dyp} t`);
+    if (sovn.rem      != null) lines.push(`REM: ${sovn.rem} t`);
+    if (sovn.lett     != null) lines.push(`Lett søvn: ${sovn.lett} t`);
+    if (sovn.score    != null) lines.push(`Score: ${sovn.score}/100`);
+    if (sovn.kvalitet != null) {
+      lines.push(`Subjektiv kvalitet: ${['', 'Dårlig', 'OK', 'Bra'][sovn.kvalitet] || sovn.kvalitet}`);
+    }
+  }
+
+  if (hrv) {
+    lines.push('', '## HRV');
+    if (hrv.verdi    != null) lines.push(`Verdi: ${hrv.verdi} ms`);
+    if (hrv.status)           lines.push(`Status: ${hrv.status}`);
+    if (hrv.feedback)         lines.push(`Feedback: ${hrv.feedback}`);
+  }
+
+  if (historikk?.length) {
+    lines.push('', '## Historikk (siste 7 dager)');
+    historikk.forEach(h => {
+      const parts = [`${h.dato}: ${h.sport || h.type || '—'}, ${h.varighet ?? '?'} min`];
+      if (h.faktiskSnittHR) parts.push(`HR ${h.faktiskSnittHR}`);
+      if (h.distanse)       parts.push(`${h.distanse} km`);
+      if (h.smerte != null) parts.push(`smerte ${h.smerte}`);
+      lines.push(parts.join(', '));
+    });
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Parse Claude's JSON response into a structured result.
+ * Strips markdown fences if present.
+ * @param {string} text
+ * @returns {{ ok: true, data: object } | { ok: false, raw: string }}
+ */
+function parseStructuredResponse(text) {
+  const REQUIRED = ['summary', 'loadAssessment', 'recoveryStatus', 'nextSessionRecommendation', 'motivation'];
+
+  const finalize = (parsed) => {
+    REQUIRED.forEach(k => { if (!parsed[k]) parsed[k] = '—'; });
+    return parsed;
+  };
+
+  // Strip markdown code fences (```json ... ```)
+  const stripped = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+
+  // Attempt 1: parse the stripped text directly
+  try {
+    return { ok: true, data: finalize(JSON.parse(stripped)) };
+  } catch { /* fall through */ }
+
+  // Attempt 2: extract outermost JSON object by brace matching
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try {
+      return { ok: true, data: finalize(JSON.parse(stripped.slice(start, end + 1))) };
+    } catch { /* fall through */ }
+  }
+
+  return { ok: false, raw: text };
 }

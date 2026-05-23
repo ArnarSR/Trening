@@ -1146,9 +1146,11 @@ function renderIdagView(){
 
   const weekSection=document.getElementById('idag-week-section');
   if(weekOkter.length){
-    const nextOktHtml=renderIdagOktRow(weekOkter[0],false,true);
+    // Only feature the first upcoming session if today has no session
+    const featureFirst=!todayOkt;
+    const firstHtml=renderIdagOktRow(weekOkter[0],false,featureFirst);
     const restHtml=weekOkter.slice(1).map(o=>renderIdagOktRow(o,false,false)).join('');
-    weekSection.innerHTML=nextOktHtml+restHtml;
+    weekSection.innerHTML=firstHtml+restHtml;
   }else{
     weekSection.innerHTML='<div class="empty-state"><div class="icon">📭</div>Ingen kommende økter</div>';
   }

@@ -259,6 +259,11 @@ export default {
         return syncStrava(env);
       }
 
+      // GET /api/debug/last-activity
+      if (path === '/api/debug/last-activity' && request.method === 'GET') {
+        return debugLastActivity(env);
+      }
+
       // POST /api/analyse
       if (path === '/api/analyse' && request.method === 'POST') {
         const body = await request.json();
@@ -373,6 +378,12 @@ async function syncStrava(env) {
     .sort();
   if (!dates.length) return json({ synced: 0, created: 0, total: 0 });
   const oldest = dates[0];
+  const newest = dates[dates.length - 1];
+
+  console.log(JSON.stringify({
+    ts: new Date().toISOString(), event: 'sync_start',
+    total: activities.length, oldest, newest,
+  }));
 
   // Query Notion for all pages since oldest activity date
   const notionPages = await queryNotionSince(env, oldest);
@@ -387,11 +398,11 @@ async function syncStrava(env) {
     if (dato && !dateMap[dato]) dateMap[dato] = page;
   }
 
-  let synced = 0, created = 0;
+  let synced = 0, created = 0, errors = 0;
   const MAX_WRITES = 40; // Cloudflare free tier: 50 subrequest limit
 
   for (const activity of activities) {
-    if (synced + created >= MAX_WRITES) break;
+    if (synced + created + errors >= MAX_WRITES) break;
     const date = activity.start_date_local?.split('T')[0];
     if (!date) continue;
 
@@ -408,9 +419,17 @@ async function syncStrava(env) {
     // Match by Strava ID first (exact dedup), fall back to date (catches manually-created sessions)
     const existing = stravaMap[stravaId] || dateMap[date];
 
+    console.log(JSON.stringify({
+      ts: new Date().toISOString(), event: 'sync_activity',
+      stravaId, date, name, sportKey, action: existing ? 'update' : 'create',
+    }));
+
     if (existing) {
       const pageId = existing.id;
-      const props = {};
+      const props = {
+        // Mark Strava-confirmed sessions as completed, even if they were planned
+        'Status': { select: { name: 'Gjennomført' } },
+      };
       if (avgHR !== null)    props['Faktisk snitt HR'] = { number: avgHR };
       if (maxHR !== null)    props['Faktisk maks HR']  = { number: maxHR };
       if (duration !== null) props['Varighet (min)']   = { number: duration };
@@ -421,7 +440,13 @@ async function syncStrava(env) {
 
       const patchBody = { properties: props };
       if (sport) patchBody.icon = { type: 'emoji', emoji: sport.icon };
-      await notionRequest(env, 'PATCH', `/pages/${pageId}`, patchBody);
+      const patchRes = await notionRequest(env, 'PATCH', `/pages/${pageId}`, patchBody);
+      const patchData = await patchRes.json();
+      if (!patchRes.ok) {
+        console.log(JSON.stringify({ ts: new Date().toISOString(), event: 'sync_patch_error', stravaId, date, error: patchData }));
+        errors++;
+        continue;
+      }
       // Register by stravaId so two-a-days don't collide via dateMap
       stravaMap[stravaId] = existing;
       delete dateMap[date]; // prevent a two-a-day from date-matching the same page
@@ -444,12 +469,67 @@ async function syncStrava(env) {
       if (sport) createBody.icon = { type: 'emoji', emoji: sport.icon };
       const newPage = await notionRequest(env, 'POST', '/pages', createBody);
       const newData = await newPage.json();
+      if (!newPage.ok) {
+        console.log(JSON.stringify({ ts: new Date().toISOString(), event: 'sync_create_error', stravaId, date, name, sportKey, error: newData }));
+        errors++;
+        continue;
+      }
       stravaMap[stravaId] = { id: newData.id || 'new' };
       created++;
     }
   }
 
-  return json({ synced, created, total: activities.length, capped: synced + created >= MAX_WRITES });
+  return json({ synced, created, errors, total: activities.length, capped: synced + created + errors >= MAX_WRITES });
+}
+
+async function debugLastActivity(env) {
+  const form = new FormData();
+  form.append('client_id', env.STRAVA_CLIENT_ID.trim());
+  form.append('client_secret', env.STRAVA_CLIENT_SECRET.trim());
+  form.append('refresh_token', env.STRAVA_REFRESH_TOKEN.trim());
+  form.append('grant_type', 'refresh_token');
+  const tokenRes = await fetch('https://www.strava.com/oauth/token', { method: 'POST', body: form });
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) return json({ error: 'Strava token feil', detail: tokenData }, 500);
+
+  const actRes = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=5', {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+  const activities = await actRes.json();
+  if (!Array.isArray(activities) || !activities.length) return json({ error: 'Ingen aktiviteter', detail: activities });
+
+  return json({
+    activities: activities.map(a => {
+      const sportKey = (a.sport_type || a.type || '').toLowerCase();
+      const sport = SPORT_MAP[sportKey];
+      return {
+        raw: {
+          id: a.id,
+          name: a.name,
+          sport_type: a.sport_type,
+          type: a.type,
+          start_date: a.start_date,
+          start_date_local: a.start_date_local,
+          elapsed_time: a.elapsed_time,
+          distance: a.distance,
+          average_speed: a.average_speed,
+          average_heartrate: a.average_heartrate,
+          max_heartrate: a.max_heartrate,
+        },
+        mapped: {
+          stravaId: String(a.id),
+          sportKey,
+          sportFound: !!sport,
+          sport: sport?.type || null,
+          date: a.start_date_local?.split('T')[0],
+          duration: a.elapsed_time ? Math.round(a.elapsed_time / 60) : null,
+          distance: a.distance ? Math.round(a.distance / 100) / 10 : null,
+          pace: a.average_speed > 0 ? formatPace(a.average_speed) : null,
+          avgHR: a.average_heartrate ? Math.round(a.average_heartrate) : null,
+        },
+      };
+    }),
+  });
 }
 
 async function queryNotionSince(env, since) {

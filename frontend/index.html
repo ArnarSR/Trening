@@ -406,6 +406,17 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     <div class="page-title">Treningsplan</div>
     <div class="page-sub" id="plan-cal-status">Diskuter og bygg planen din med Claude</div>
   </div>
+
+  <!-- Current plan summary -->
+  <div id="plan-current" style="margin-bottom:14px;display:none;">
+    <div class="sec-head" style="margin-bottom:8px;">
+      <div class="sec-title" id="plan-current-title">Nåværende plan</div>
+      <button class="btn btn-sm" onclick="togglePlanCurrent()" id="plan-current-toggle" style="font-size:10px;">Skjul</button>
+    </div>
+    <div id="plan-current-sessions" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);overflow:hidden;margin-bottom:8px;"></div>
+    <div id="plan-last-summary" style="display:none;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:12px 14px;font-size:12px;line-height:1.7;color:var(--text2);white-space:pre-wrap;"></div>
+  </div>
+
   <div id="plan-chat" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;min-height:120px;"></div>
   <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:12px;">
     <textarea class="form-input" id="plan-input" style="width:100%;min-height:72px;resize:none;font-family:var(--sans);margin-bottom:8px;border:none;background:transparent;padding:0;" placeholder="Hva skal fokuset være neste uke? Lag en 4-ukers plan mot Sommernatt…"></textarea>
@@ -1776,6 +1787,84 @@ function showPlanEmpty(){
   }
 }
 
+// ── Current plan display ──────────────────────────────────────────────────────
+let _planCurrentVisible = true;
+
+function renderCurrentPlan(){
+  const today = getTodayDate();
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate()+14);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+
+  // Upcoming To Do sessions in the next 14 days
+  const planned = allOkter
+    .filter(o=>o.status==='To Do'&&o.dato&&o.dato>=today&&o.dato<=cutoffStr&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .sort((a,b)=>a.dato.localeCompare(b.dato));
+
+  // Last saved plan summary
+  const lastPlan = allOkter
+    .filter(o=>o.navn?.startsWith('Treningsplan'))
+    .sort((a,b)=>b.dato.localeCompare(a.dato))[0];
+
+  const section = document.getElementById('plan-current');
+  const sessionsEl = document.getElementById('plan-current-sessions');
+  const summaryEl = document.getElementById('plan-last-summary');
+  const titleEl = document.getElementById('plan-current-title');
+  if(!section) return;
+
+  if(!planned.length && !lastPlan){ section.style.display='none'; return; }
+  section.style.display='block';
+
+  titleEl.textContent = planned.length
+    ? `Nåværende plan — ${planned.length} økt${planned.length!==1?'er':''}`
+    : 'Nåværende plan';
+
+  if(planned.length){
+    sessionsEl.innerHTML = planned.map(o=>{
+      const typeClass = TYPE_MAP[o.type]||'type-s2';
+      const sport = o.sport ? o.sport.split(' ')[0] : '';
+      const meta = [o.varighet?o.varighet+'min':'', o.planlagtPuls?'HR: '+o.planlagtPuls:''].filter(Boolean).join(' · ');
+      return `<div class="okt-row" style="cursor:default;">
+        <span class="okt-type ${typeClass}">${sport||o.type?.slice(0,4)||'ØKT'}</span>
+        <div class="okt-center">
+          <div class="okt-name">${esc(o.navn)}</div>
+          <div class="okt-date">${formatDato(o.dato)}${meta?' · '+esc(meta):''}</div>
+        </div>
+        <div class="okt-right">
+          <div class="okt-status status-todo">·</div>
+        </div>
+      </div>`;
+    }).join('');
+    sessionsEl.style.display='block';
+  } else {
+    sessionsEl.style.display='none';
+  }
+
+  if(lastPlan?.vurdering){
+    summaryEl.style.display='block';
+    // Try to strip the JSON block — only show the human-readable summary
+    const noJson = lastPlan.vurdering.replace(/```json[\s\S]*?```/g,'').trim();
+    const preview = noJson.slice(0,400)+(noJson.length>400?'…':'');
+    summaryEl.innerHTML = `<div style="font-size:9px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Forrige plan — ${formatDato(lastPlan.dato)}</div>${esc(preview)}`;
+  } else {
+    summaryEl.style.display='none';
+  }
+}
+
+function togglePlanCurrent(){
+  const btn = document.getElementById('plan-current-toggle');
+  _planCurrentVisible = !_planCurrentVisible;
+  if(_planCurrentVisible){
+    renderCurrentPlan();
+    if(btn) btn.textContent='Skjul';
+  } else {
+    const sessionsEl=document.getElementById('plan-current-sessions');
+    const summaryEl=document.getElementById('plan-last-summary');
+    if(sessionsEl) sessionsEl.style.display='none';
+    if(summaryEl)  summaryEl.style.display='none';
+    if(btn) btn.textContent='Vis';
+  }
+}
+
 // Called when switching to Plan view
 async function loadPlanContext(){
   const url=getWorkerUrl();
@@ -1801,6 +1890,8 @@ async function loadPlanContext(){
     if(r.ok&&d.tekst)planPrinsipper=d.tekst;
     else planPrinsipper=localStorage.getItem('fase_prinsipper')||'';
   }catch(e){planPrinsipper=localStorage.getItem('fase_prinsipper')||'';}
+  // Render current plan (uses allOkter — no extra fetch needed)
+  renderCurrentPlan();
 }
 
 function computeWeeklyVolume(){

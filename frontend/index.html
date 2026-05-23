@@ -17,13 +17,13 @@
   --accent:#c8f060;--accent2:#8bffc8;--warn:#ffb347;--danger:#ff6b6b;--info:#60b4ff;
   --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
   --r:10px;--rlg:14px;
-  --bottom-bar:60px;--safe-bottom:env(safe-area-inset-bottom,0px);
+  --bottom-bar:60px;--safe-bottom:env(safe-area-inset-bottom,0px);--safe-top:env(safe-area-inset-top,0px);
 }
 html,body{height:100%;overflow:hidden;}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;}
 .app{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .sidebar{display:none;}
-.main{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px 16px calc(var(--bottom-bar) + var(--safe-bottom) + 16px);-webkit-overflow-scrolling:touch;}
+.main{flex:1;overflow-y:auto;overflow-x:hidden;padding:calc(16px + var(--safe-top)) 16px calc(var(--bottom-bar) + var(--safe-bottom) + 16px);-webkit-overflow-scrolling:touch;}
 .bottom-nav{display:flex;align-items:stretch;background:var(--bg2);border-top:0.5px solid var(--border);height:var(--bottom-bar);padding-bottom:var(--safe-bottom);flex-shrink:0;position:sticky;bottom:0;z-index:100;}
 .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:500;color:var(--text3);cursor:pointer;border:none;background:none;transition:color .15s;-webkit-tap-highlight-color:transparent;padding:6px 0;}
 .bn-item.active{color:var(--accent);}
@@ -1951,18 +1951,8 @@ let _planCurrentVisible = true;
 
 function renderCurrentPlan(){
   const today = getTodayDate();
-  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate()+14);
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate()+21);
   const cutoffStr = cutoff.toISOString().split('T')[0];
-
-  // Upcoming To Do sessions in the next 14 days
-  const planned = allOkter
-    .filter(o=>o.status==='To Do'&&o.dato&&o.dato>=today&&o.dato<=cutoffStr&&o.type!=='Dagbok'&&o.type!=='Mål')
-    .sort((a,b)=>a.dato.localeCompare(b.dato));
-
-  // Last saved plan summary
-  const lastPlan = allOkter
-    .filter(o=>o.navn?.startsWith('Treningsplan'))
-    .sort((a,b)=>b.dato.localeCompare(a.dato))[0];
 
   const section = document.getElementById('plan-current');
   const sessionsEl = document.getElementById('plan-current-sessions');
@@ -1970,40 +1960,90 @@ function renderCurrentPlan(){
   const titleEl = document.getElementById('plan-current-title');
   if(!section) return;
 
-  if(!planned.length && !lastPlan){ section.style.display='none'; return; }
+  // ── 1. Goals ──────────────────────────────────────────────────────────────
+  const upcomingGoals = allGoals
+    .filter(g=>g.status!=='Gjennomført'&&g.dato&&g.dato>=today)
+    .sort((a,b)=>a.dato.localeCompare(b.dato))
+    .slice(0,3);
+
+  // ── 2. Fase / filosofi ────────────────────────────────────────────────────
+  const faseNavn = localStorage.getItem('fase_navn')||'';
+  const prinsipper = localStorage.getItem('fase_prinsipper')||'';
+
+  // ── 3. Planned sessions ───────────────────────────────────────────────────
+  const planned = allOkter
+    .filter(o=>o.status==='To Do'&&o.dato&&o.dato>=today&&o.dato<=cutoffStr&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .sort((a,b)=>a.dato.localeCompare(b.dato));
+
+  // ── 4. Last plan summary ──────────────────────────────────────────────────
+  const lastPlan = allOkter
+    .filter(o=>o.navn?.startsWith('Treningsplan'))
+    .sort((a,b)=>b.dato.localeCompare(a.dato))[0];
+
+  const hasContent = upcomingGoals.length||faseNavn||planned.length||lastPlan;
+  if(!hasContent){ section.style.display='none'; return; }
   section.style.display='block';
 
   titleEl.textContent = planned.length
-    ? `Nåværende plan — ${planned.length} økt${planned.length!==1?'er':''}`
-    : 'Nåværende plan';
+    ? `Kontekst — ${planned.length} økt${planned.length!==1?'er':''} planlagt`
+    : 'Kontekst';
 
+  // Build sessions block
+  let html = '';
+
+  // Goals strip
+  if(upcomingGoals.length){
+    html += `<div style="padding:10px 14px;border-bottom:0.5px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">`;
+    html += upcomingGoals.map(g=>{
+      const days = daysUntil(g.dato);
+      const daysTxt = days===0?'I dag!':days>0?`${days}d`:'Passert';
+      const isRace = g.type==='Race';
+      return `<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);background:var(--bg3);padding:4px 9px;border-radius:6px;">
+        <span>${isRace?'🏁':'🎯'}</span>
+        <span style="color:var(--text);">${esc(g.navn.length>18?g.navn.slice(0,16)+'…':g.navn)}</span>
+        <span style="color:${days<=14?'var(--warn)':'var(--accent)'};">${daysTxt}</span>
+      </div>`;
+    }).join('');
+    html += `</div>`;
+  }
+
+  // Filosofi strip
+  if(faseNavn||prinsipper){
+    const preview = prinsipper.split('\n').slice(0,2).join(' · ').slice(0,120);
+    html += `<div style="padding:10px 14px;border-bottom:0.5px solid var(--border);">
+      ${faseNavn?`<div style="font-size:10px;font-weight:600;color:var(--accent);font-family:var(--mono);margin-bottom:3px;">${esc(faseNavn)}</div>`:''}
+      ${preview?`<div style="font-size:11px;color:var(--text2);line-height:1.5;">${esc(preview)}${prinsipper.length>120?'…':''}</div>`:''}
+    </div>`;
+  }
+
+  // Planned sessions
   if(planned.length){
-    sessionsEl.innerHTML = planned.map(o=>{
+    html += planned.map(o=>{
       const typeClass = TYPE_MAP[o.type]||'type-s2';
       const sport = o.sport ? o.sport.split(' ')[0] : '';
-      const meta = [o.varighet?o.varighet+'min':'', o.planlagtPuls?'HR: '+o.planlagtPuls:''].filter(Boolean).join(' · ');
+      const meta = [o.varighet?o.varighet+'min':'', o.planlagtPuls?'HR '+o.planlagtPuls:''].filter(Boolean).join(' · ');
       return `<div class="okt-row" style="cursor:default;">
         <span class="okt-type ${typeClass}">${sport||o.type?.slice(0,4)||'ØKT'}</span>
         <div class="okt-center">
           <div class="okt-name">${esc(o.navn)}</div>
           <div class="okt-date">${formatDato(o.dato)}${meta?' · '+esc(meta):''}</div>
         </div>
-        <div class="okt-right">
-          <div class="okt-status status-todo">·</div>
-        </div>
+        <div class="okt-right"><div class="okt-status status-todo">·</div></div>
       </div>`;
     }).join('');
-    sessionsEl.style.display='block';
   } else {
-    sessionsEl.style.display='none';
+    html += `<div style="padding:12px 14px;font-size:12px;color:var(--text3);">Ingen planlagte økter de neste 3 ukene</div>`;
   }
 
+  sessionsEl.innerHTML = html;
+  sessionsEl.style.display = 'block';
+
+  // Last plan summary (collapsed under sessions)
   if(lastPlan?.vurdering){
-    summaryEl.style.display='block';
-    // Try to strip the JSON block — only show the human-readable summary
     const noJson = lastPlan.vurdering.replace(/```json[\s\S]*?```/g,'').trim();
-    const preview = noJson.slice(0,400)+(noJson.length>400?'…':'');
-    summaryEl.innerHTML = `<div style="font-size:9px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Forrige plan — ${formatDato(lastPlan.dato)}</div>${esc(preview)}`;
+    const preview = noJson.slice(0,300)+(noJson.length>300?'…':'');
+    summaryEl.style.display='block';
+    summaryEl.innerHTML = `<div style="font-size:9px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">Siste plan — ${formatDato(lastPlan.dato)}</div><div style="color:var(--text2);">${esc(preview)}</div>`;
   } else {
     summaryEl.style.display='none';
   }

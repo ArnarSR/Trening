@@ -1270,14 +1270,33 @@ function computeACL(){
   return Math.round(acute/chronic*100)/100;
 }
 
+function sessionKm(o){
+  if(o.distance)return o.distance;
+  // Fallback: estimate from pace × duration for running sessions
+  if(o.pace&&o.varighet){
+    const sp=String(o.sport||'');const st=String(o.type||'');
+    const isRun=sp.includes('Løp')||st==='Race'||st==='Testløp'||st==='Løp';
+    if(isRun){
+      const parts=o.pace.split(':');
+      if(parts.length>=2){
+        const secPerKm=parseInt(parts[0])*60+parseInt(parts[1]);
+        if(secPerKm>0)return Math.round(o.varighet*60/secPerKm*10)/10;
+      }
+    }
+  }
+  return null;
+}
+
 function computeWeeklyKm(){
   const now=new Date();
   // Week starts Monday
   const dayOfWeek=now.getDay()===0?6:now.getDay()-1;
   const monday=new Date(now);monday.setDate(now.getDate()-dayOfWeek);monday.setHours(0,0,0,0);
-  return allOkter
-    .filter(o=>o.status==='Gjennomført'&&o.distance&&new Date(o.dato+'T12:00:00')>=monday&&o.type!=='Dagbok')
-    .reduce((s,o)=>s+o.distance,0);
+  let total=0;
+  allOkter
+    .filter(o=>o.status==='Gjennomført'&&new Date(o.dato+'T12:00:00')>=monday&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .forEach(o=>{const km=sessionKm(o);if(km)total+=km;});
+  return Math.round(total*10)/10;
 }
 
 function updateIdagStats(){
@@ -1417,6 +1436,18 @@ async function autoLoadTodayBrief(okt){
   const aiBox=document.getElementById('idag-ai-text');
   const aiStatus=document.getElementById('idag-ai-status');
   if(!aiSec)return;
+
+  // Cache per session+day — don't re-hit API unless okt or date changes
+  const cacheKey=`brief_${okt.id}_${new Date().toISOString().slice(0,10)}`;
+  const cached=sessionStorage.getItem(cacheKey);
+  if(cached){
+    aiSec.style.display='block';
+    aiBox.className='analysis-box';
+    aiBox.textContent=cached;
+    aiStatus.textContent='📋 Økt-brief';
+    return;
+  }
+
   aiSec.style.display='block';
   aiStatus.textContent='Forbereder…';
   aiBox.className='analysis-box loading';
@@ -1455,9 +1486,11 @@ Skriv BARE brief-teksten — ingen overskrift, ingen intro. Konkret, motiverende
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const d=await r.json();
+    const txt=d.text||'Ingen respons.';
     aiBox.className='analysis-box';
-    aiBox.textContent=d.text||'Ingen respons.';
+    aiBox.textContent=txt;
     aiStatus.textContent='📋 Økt-brief';
+    sessionStorage.setItem(cacheKey,txt);
   }catch(e){aiSec.style.display='none';}
 }
 

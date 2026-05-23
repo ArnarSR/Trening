@@ -1267,6 +1267,7 @@ let _fbStarSelected=0;
 
 function checkForFeedbackNeeded(){
   if(sessionStorage.getItem('feedback_dismissed'))return;
+  if(document.getElementById('feedback-card'))return; // already showing — don't disrupt user
   const cutoff=new Date();cutoff.setHours(cutoff.getHours()-48);
   const cutoffStr=cutoff.toISOString().split('T')[0];
   const needsFeedback=allOkter.filter(o=>

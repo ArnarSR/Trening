@@ -877,7 +877,8 @@ async function syncStrava(){
     const r=await fetch(url+'/api/sync',{method:'POST'});
     const d=await r.json();
     if(r.ok){
-      const msg=`✓ ${d.synced} oppdatert, ${d.created} ny av ${d.total}`;
+      const parts=[`✓ ${d.synced??0} oppdatert`,`${d.created??0} ny`];if(d.errors>0)parts.push(`${d.errors} feil`);
+      const msg=parts.join(', ')+` av ${d.total??'?'}`;
       if(resultEl){resultEl.textContent=msg;resultEl.style.color='var(--accent)';}
       await fetchOkter();
       await autoAnalyseIdagOkt();
@@ -910,9 +911,10 @@ async function autoAnalyseIdagOkt(){
   aiBox.textContent='Claude analyserer dagens økt…';
 
   const prinsipper=localStorage.getItem('fase_prinsipper')||'';
-  const prompt=`Du er treneren til Arnar (33 år, pappaperm, hofte/kne-rehab). Maks HR: 199 bpm.
-Soner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.
-${prinsipper?`\nFase-prinsipper:\n${prinsipper}`:''}
+  const zoneStr=(typeof ZONES!=='undefined'&&ZONES.length)?ZONES.map(z=>`${z.n}: ${z.min===0?'<'+z.max:z.max===999?z.min+'+':z.min+'–'+z.max}`).join(' | '):'';
+  const kontekst=typeof treningskontekst!=='undefined'?treningskontekst:'';
+  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.
+HR-soner: ${zoneStr||'ukjent'}.${kontekst?'\n\nUtøverprofil:\n'+kontekst:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
 
 Dagens økt: ${okt.navn}
 Sport: ${okt.sport||okt.type||'—'} | Type: ${okt.type||'—'}
@@ -1017,14 +1019,20 @@ function updateStats(){
   const done=allOkter.filter(o=>o.status==='Gjennomført'&&o.type!=='Dagbok'&&o.type!=='Mål').length;
   document.getElementById('s-done').textContent=done;
   const countEl=document.getElementById('okt-count');if(countEl)countEl.textContent=done;
-  const race=allOkter.find(o=>o.type==='Race'&&o.navn?.includes('23:17'));
-  document.getElementById('s-pr').textContent=race?'23:17':'—';
-  document.getElementById('hero-pr').textContent='23:17';
-  document.getElementById('hero-sub').textContent='Grefsenkollen · 20. mai 2026 · PR 🏆';
-  document.getElementById('hero-phase').textContent='Fase 0';
-  document.getElementById('hero-phase-sub').textContent='Aktiv restitusjon';
-  document.getElementById('sb-fase').textContent='Fase 0 · Restitusjon';
-  document.getElementById('sb-pr').textContent='23:17 🎉';
+  const fase=localStorage.getItem('fase_navn')||'—';
+  const faseSub=(localStorage.getItem('fase_prinsipper')||'').split('\n')[0].replace(/^[•\-]\s*/,'')||'Aktiv restitusjon';
+  const prSessions=allOkter.filter(o=>(o.type==='Testløp'||o.type==='Race')&&o.status==='Gjennomført'&&o.pace);
+  prSessions.sort((a,b)=>a.pace.localeCompare(b.pace));
+  const bestPR=prSessions[0];
+  const prText=bestPR?bestPR.pace+'/km':'—';
+  const prSub=bestPR?esc(bestPR.navn)+' · '+formatDato(bestPR.dato)+' 🏆':'Ingen race ennå';
+  document.getElementById('s-pr').textContent=prText;
+  document.getElementById('hero-pr').textContent=prText;
+  document.getElementById('hero-sub').textContent=prSub;
+  document.getElementById('hero-phase').textContent=fase;
+  document.getElementById('hero-phase-sub').textContent=faseSub;
+  document.getElementById('sb-fase').textContent=fase+(faseSub&&faseSub!=='Aktiv restitusjon'?' · '+faseSub.slice(0,20):'');
+  document.getElementById('sb-pr').textContent=bestPR?bestPR.pace+' 🎉':'—';
 }
 
 // ── Detail panel ──────────────────────────────────────────────────────────────
@@ -1067,7 +1075,10 @@ async function analyseOkt(){
   const varighet=document.getElementById('f-varighet').value;
   const pace=document.getElementById('f-pace').value;
   const vurdering=document.getElementById('f-vurdering').value;
-  const prompt=`Du er treneren til Arnar (33 år, pappaperm, hofte/kne-rehab). Maks HR: 199 bpm.\nSoner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
+  const _zoneStr=(typeof ZONES!=='undefined'&&ZONES.length)?ZONES.map(z=>`${z.n}: ${z.min===0?'<'+z.max:z.max===999?z.min+'+':z.min+'–'+z.max}`).join(' | '):'ukjent';
+  const _kontekst=typeof treningskontekst!=='undefined'?treningskontekst:'';
+  const _prinsipper=localStorage.getItem('fase_prinsipper')||'';
+  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.\nHR-soner: ${_zoneStr}.${_kontekst?'\n\nUtøverprofil:\n'+_kontekst:''}${_prinsipper?'\n\nFase-prinsipper:\n'+_prinsipper:''}\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
   const section=document.getElementById('dp-analysis-section');
   const box=document.getElementById('dp-analysis-text');
   section.style.display='block';
@@ -1826,11 +1837,14 @@ async function logHelse(){
   statusEl.textContent='Lagrer…';statusEl.style.color='var(--text2)';
 
   const body={dato:getTodayDate()};
-  if(sovnTimer)    body.sovnTimer=parseFloat(sovnTimer);
+  const sovnTimerVal=parseFloat(sovnTimer);
+  if(!isNaN(sovnTimerVal)&&sovnTimer) body.sovnTimer=sovnTimerVal;
   if(selectedSovnKval) body.sovnKvalitet=selectedSovnKval;
-  if(protein)      body.protein=parseInt(protein);
+  const proteinVal=parseInt(protein);
+  if(!isNaN(proteinVal)&&protein) body.protein=proteinVal;
   if(selectedEnergi)   body.energi=selectedEnergi;
-  if(vekt)         body.vekt=parseFloat(vekt);
+  const vektVal=parseFloat(vekt);
+  if(!isNaN(vektVal)&&vekt) body.vekt=vektVal;
   if(notat)        body.notat=notat;
 
   try{
@@ -2225,7 +2239,7 @@ function renderCurrentPlan(){
 
   // Filosofi strip
   if(faseNavn||prinsipper){
-    const preview = prinsipper.split('\n').slice(0,2).join(' · ').slice(0,120);
+    const preview = (prinsipper||'').split('\n').slice(0,2).join(' · ').slice(0,120);
     html += `<div style="padding:10px 14px;border-bottom:0.5px solid var(--border);">
       ${faseNavn?`<div style="font-size:10px;font-weight:600;color:var(--accent);font-family:var(--mono);margin-bottom:3px;">${esc(faseNavn)}</div>`:''}
       ${preview?`<div style="font-size:11px;color:var(--text2);line-height:1.5;">${esc(preview)}${prinsipper.length>120?'…':''}</div>`:''}

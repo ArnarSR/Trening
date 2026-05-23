@@ -61,6 +61,17 @@ const SPORT_MAP = {
   nordicski:        { type: '⛷️ Langrenn',        icon: '⛷️' },
   workout:          { type: '💪 Styrke',          icon: '💪' },
   weighttraining:   { type: '💪 Styrke',          icon: '💪' },
+  yoga:             { type: '🧘 Yoga',            icon: '🧘' },
+  pilates:          { type: '🧘 Yoga',            icon: '🧘' },
+  elliptical:       { type: '💪 Styrke',          icon: '💪' },
+  rowing:           { type: '🚣 Roing',           icon: '🚣' },
+  virtualrow:       { type: '🚣 Roing',           icon: '🚣' },
+  alpineski:        { type: '⛷️ Alpint',          icon: '⛷️' },
+  inlineskate:      { type: '🛼 Rulleskøyter',   icon: '🛼' },
+  standuppaddling:  { type: '🏄 SUP',             icon: '🏄' },
+  soccer:           { type: '⚽ Fotball',          icon: '⚽' },
+  tennis:           { type: '🎾 Tennis',           icon: '🎾' },
+  crossfit:         { type: '💪 Styrke',          icon: '💪' },
 };
 
 export default {
@@ -178,7 +189,6 @@ export default {
         };
         if (body.vurdering) props['Vurdering'] = { rich_text: [{ text: { content: body.vurdering } }] };
         if (body.smerte != null) props['Smerte 0-10'] = { number: body.smerte };
-        if (body.vekt != null)   props['Vekt (kg)']   = { number: body.vekt };
         const createBody = { parent: { database_id: DB_ID }, properties: props, icon: { type: 'emoji', emoji: body.icon || '📝' } };
         const res  = await notionRequest(env, 'POST', '/pages', createBody);
         const data = await res.json();
@@ -304,9 +314,9 @@ export default {
           }));
 
           if (result.ok) return json(result.data);
-          // Fallback: surface raw text in summary if JSON parse failed
+          // Fallback: surface full raw text in summary if JSON parse failed
           return json({
-            summary: rawText.slice(0, 500),
+            summary: rawText,
             loadAssessment: '—', recoveryStatus: '—',
             nextSessionRecommendation: '—', motivation: '—',
           });
@@ -584,7 +594,9 @@ async function savePrinsipper(env, tekst) {
   };
 
   if (existing) {
-    await notionRequest(env, 'PATCH', `/pages/${existing.id}`, { properties: props });
+    const res = await notionRequest(env, 'PATCH', `/pages/${existing.id}`, { properties: props });
+    const data = await res.json();
+    if (!res.ok) return json({ error: 'Notion feil', detail: data }, 500);
     return json({ ok: true, id: existing.id });
   } else {
     const body = {
@@ -597,6 +609,7 @@ async function savePrinsipper(env, tekst) {
     };
     const res = await notionRequest(env, 'POST', '/pages', body);
     const data = await res.json();
+    if (!res.ok) return json({ error: 'Notion feil', detail: data }, 500);
     return json({ ok: true, id: data.id });
   }
 }
@@ -619,7 +632,9 @@ async function saveKontekst(env, tekst) {
   const existing = (await findRes.json()).results?.[0];
   const props    = { 'Vurdering': { rich_text: [{ text: { content: tekst } }] } };
   if (existing) {
-    await notionRequest(env, 'PATCH', `/pages/${existing.id}`, { properties: props });
+    const res = await notionRequest(env, 'PATCH', `/pages/${existing.id}`, { properties: props });
+    const data = await res.json();
+    if (!res.ok) return json({ error: 'Notion feil', detail: data }, 500);
     return json({ ok: true, id: existing.id });
   }
   const res  = await notionRequest(env, 'POST', '/pages', {
@@ -628,6 +643,7 @@ async function saveKontekst(env, tekst) {
     icon: { type: 'emoji', emoji: '🧠' },
   });
   const data = await res.json();
+  if (!res.ok) return json({ error: 'Notion feil', detail: data }, 500);
   return json({ ok: true, id: data.id });
 }
 
@@ -857,8 +873,6 @@ function buildNotionProps(body) {
     props['Varighet (min)'] = { number: body.varighet };
   if (body.smerte != null)
     props['Smerte 0-10'] = { number: body.smerte };
-  if (body.vekt != null)
-    props['Vekt (kg)'] = { number: body.vekt };
   if (body.medVogn !== undefined)
     props['Med vogn'] = { checkbox: body.medVogn };
   return props;

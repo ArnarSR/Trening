@@ -234,6 +234,61 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     <div class="stat-card"><div class="stat-label">Km denne uka</div><div class="stat-val">—</div><div class="stat-sub">løping</div></div>
   </div>
 
+  <!-- Recovery strip -->
+  <div id="idag-recovery-strip" style="margin:10px 0 6px;cursor:pointer;" onclick="toggleHelseForm()">
+    <div id="idag-recovery-content" style="display:flex;align-items:center;gap:8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:10px 14px;">
+      <span style="font-size:13px;">💤</span>
+      <span id="idag-recovery-text" style="font-size:12px;color:var(--text3);flex:1;">Logg søvn &amp; næring →</span>
+    </div>
+  </div>
+
+  <!-- Helse form -->
+  <div id="helse-form" style="display:none;background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:var(--rlg);padding:14px;margin-bottom:10px;">
+    <div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-bottom:10px;letter-spacing:.06em;text-transform:uppercase;">Søvn &amp; næring</div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <span style="font-size:12px;color:var(--text2);width:52px;">😴 Søvn</span>
+      <input type="number" id="helse-sovn" step="0.5" min="0" max="14" placeholder="—" inputmode="decimal"
+        style="width:56px;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:6px;padding:5px 8px;font-size:13px;color:var(--text);font-family:var(--mono);-webkit-appearance:none;">
+      <span style="font-size:11px;color:var(--text3);">t</span>
+      <div style="display:flex;gap:4px;">
+        <button class="chip sovn-kval-btn" data-kval="1" onclick="selectSovnKval(this)" style="font-size:11px;padding:3px 8px;">😴 Dårlig</button>
+        <button class="chip sovn-kval-btn" data-kval="2" onclick="selectSovnKval(this)" style="font-size:11px;padding:3px 8px;">😐 OK</button>
+        <button class="chip sovn-kval-btn" data-kval="3" onclick="selectSovnKval(this)" style="font-size:11px;padding:3px 8px;">😊 Bra</button>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <span style="font-size:12px;color:var(--text2);width:52px;">🥩 Protein</span>
+      <input type="number" id="helse-protein" step="1" min="0" max="15" placeholder="—" inputmode="numeric"
+        style="width:48px;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:6px;padding:5px 8px;font-size:13px;color:var(--text);font-family:var(--mono);-webkit-appearance:none;">
+      <span style="font-size:11px;color:var(--text3);">/6P</span>
+      <span style="font-size:12px;color:var(--text2);margin-left:6px;">⚡ Energi</span>
+      <div style="display:flex;gap:3px;">
+        <button class="chip energi-btn" data-e="1" onclick="selectEnergi(this)" style="font-size:11px;padding:3px 7px;">1</button>
+        <button class="chip energi-btn" data-e="2" onclick="selectEnergi(this)" style="font-size:11px;padding:3px 7px;">2</button>
+        <button class="chip energi-btn" data-e="3" onclick="selectEnergi(this)" style="font-size:11px;padding:3px 7px;">3</button>
+        <button class="chip energi-btn" data-e="4" onclick="selectEnergi(this)" style="font-size:11px;padding:3px 7px;">4</button>
+        <button class="chip energi-btn" data-e="5" onclick="selectEnergi(this)" style="font-size:11px;padding:3px 7px;">5</button>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <span style="font-size:12px;color:var(--text2);width:52px;">⚖ Vekt</span>
+      <input type="number" id="helse-vekt" step="0.1" min="40" max="200" placeholder="—" inputmode="decimal"
+        style="width:56px;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:6px;padding:5px 8px;font-size:13px;color:var(--text);font-family:var(--mono);-webkit-appearance:none;">
+      <span style="font-size:11px;color:var(--text3);">kg</span>
+    </div>
+
+    <textarea class="form-input" id="helse-notat" rows="2" placeholder="Valgfritt notat…" style="width:100%;margin-bottom:10px;font-family:var(--sans);font-size:12px;resize:none;"></textarea>
+
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-accent btn-sm" onclick="logHelse()" style="flex:1;">Logg</button>
+      <button class="btn btn-sm" onclick="toggleHelseForm()">Avbryt</button>
+      <span id="helse-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+    </div>
+  </div>
+
   <!-- Fase-prinsipper -->
   <div id="fase-prinsipper-section" style="display:none;margin-bottom:14px;">
     <div class="sec-head" style="margin-bottom:8px;">
@@ -681,6 +736,9 @@ let lastPlanResponse = '';
 let allGoals = [];
 let treningskontekst = '';
 let allDagbok = [];
+let allHelse = [];
+let selectedSovnKval = null;
+let selectedEnergi = null;
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 function getWorkerUrl(){try{return localStorage.getItem('worker_url')||'';}catch(e){return '';}}
@@ -1084,12 +1142,20 @@ async function runAnalyse(){
   const goalsCtx=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=getTodayDate()).sort((a,b)=>a.dato.localeCompare(b.dato)).map(g=>`${g.dato}: ${g.navn}${g.planlagtPuls?' (mål: '+g.planlagtPuls+')':''}`).join('\n');
   const kontekstFull=treningskontekst||localStorage.getItem('treningskontekst')||'';
   const prinsipper=localStorage.getItem('fase_prinsipper')||'';
+  const helseHistorikk=allHelse.slice(0,7).map(h=>{
+    const parts=[];
+    if(h.sovnTimer!=null)parts.push(`${h.sovnTimer}t søvn${h.sovnKvalitet?['','(dårlig)','(ok)','(bra)'][h.sovnKvalitet]:''}`);
+    if(h.protein!=null)parts.push(`${h.protein}/6P protein`);
+    if(h.energi!=null)parts.push(`energi ${h.energi}/5`);
+    return`${h.dato}: ${parts.join(', ')||'—'}`;
+  }).join('\n');
   const context=`Du er treneren til Arnar. Maks HR: ${MAX_HR} bpm. I dag: ${getTodayDate()}.
 ${kontekstFull?'Profil: '+kontekstFull:''}
 ${prinsipper?'Fase-prinsipper: '+prinsipper:''}
 ${acl!==null?'Akutt:Kronisk belastning: '+acl.toFixed(2):''}
 ${weekKm?'Km denne uka: '+weekKm.toFixed(1)+'km':''}
 ${goalsCtx?'Kommende løp:\n'+goalsCtx:''}
+${helseHistorikk?'Søvn & næring (siste dager):\n'+helseHistorikk:''}
 
 Siste gjennomførte økter:
 ${oktSummary}
@@ -1467,6 +1533,16 @@ async function autoLoadTodayBrief(okt){
     .join('\n');
   const prinsipper=planPrinsipper||localStorage.getItem('fase_prinsipper')||'';
 
+  // Last helse entry (today or yesterday)
+  const today=getTodayDate();
+  const yd=new Date();yd.setDate(yd.getDate()-1);const ydStr=yd.toISOString().slice(0,10);
+  const lastHelse=allHelse.find(h=>h.dato===today)||allHelse.find(h=>h.dato===ydStr);
+  const helseCtx=lastHelse?[
+    lastHelse.sovnTimer!=null?`Søvn: ${lastHelse.sovnTimer}t${lastHelse.sovnKvalitet?['','(dårlig)','(ok)','(bra)'][lastHelse.sovnKvalitet]:''}`:null,
+    lastHelse.protein!=null?`Protein: ${lastHelse.protein}/6P`:null,
+    lastHelse.energi!=null?`Energinivå: ${lastHelse.energi}/5`:null,
+  ].filter(Boolean).join(', '):'';
+
   const prompt=`Du er treneren til Arnar. Skriv en økt-brief på norsk (3–4 setninger) for dagens planlagte økt.
 
 Dagens økt: ${okt.navn}
@@ -1474,6 +1550,7 @@ Type: ${okt.type||'—'} | Varighet: ${okt.varighet||'?'}min | Mål-HR: ${okt.pl
 ${okt.vurdering?'Beskrivelse: '+okt.vurdering:''}
 
 ${acl!==null?`Akutt:Kronisk belastning: ${acl.toFixed(2)} (${acl<0.8?'undertrent':acl<1.3?'optimal':acl<1.5?'noe høy':'OBS: for høy!'})`:''}
+${helseCtx?'Restitusjon: '+helseCtx:''}
 
 Siste 5 gjennomførte:
 ${recent||'(ingen enda)'}
@@ -1481,7 +1558,7 @@ ${recent||'(ingen enda)'}
 ${recentDagbok?'Helse/dagbok:\n'+recentDagbok:''}
 ${prinsipper?'\nFase-prinsipper:\n'+prinsipper:''}
 
-Skriv BARE brief-teksten — ingen overskrift, ingen intro. Konkret, motiverende, direkte på norsk.`;
+Skriv BARE brief-teksten — ingen overskrift, ingen intro. Konkret, motiverende, direkte på norsk. Hvis søvnen er kort (<5t), juster intensitetsanbefalingen.`;
 
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -1668,6 +1745,112 @@ function renderDagbok(){
       <div style="color:var(--text2);">${esc(e.vurdering||e.navn)}</div>
     </div>`;
   }).join('');
+}
+
+// ── Helse & Restitusjon ──────────────────────────────────────────────────────
+async function fetchHelse(){
+  const url=getWorkerUrl();if(!url)return;
+  try{
+    const r=await fetch(url+'/api/helse');
+    const d=await r.json();
+    if(r.ok)allHelse=d.helse||[];
+  }catch(e){}
+  renderHelseStrip();
+}
+
+function renderHelseStrip(){
+  const textEl=document.getElementById('idag-recovery-text');
+  if(!textEl)return;
+  const today=getTodayDate();
+  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+  const yd=yesterday.toISOString().slice(0,10);
+
+  // Find today's or yesterday's entry
+  const entry=allHelse.find(h=>h.dato===today)||allHelse.find(h=>h.dato===yd);
+  if(!entry){
+    textEl.style.color='var(--text3)';
+    textEl.textContent='Logg søvn & næring →';
+    return;
+  }
+
+  const kvalTxt=['','😴 Dårlig','😐 OK','😊 Bra'][entry.sovnKvalitet]||'';
+  const parts=[];
+  if(entry.sovnTimer!=null){
+    const h=entry.sovnTimer;
+    const col=h<5?'var(--danger)':h<7?'var(--warn)':'var(--accent)';
+    parts.push(`<span style="color:${col};font-weight:600;">${h}t</span>${kvalTxt?' '+kvalTxt:''}`);
+  }
+  if(entry.protein!=null) parts.push(`🥩 ${entry.protein}/6P`);
+  if(entry.energi!=null) parts.push(`⚡ ${entry.energi}/5`);
+  if(entry.vekt!=null) parts.push(`⚖ ${entry.vekt}kg`);
+
+  const prefix=entry.dato===today?'I dag: ':'I natt: ';
+  textEl.style.color='var(--text2)';
+  textEl.innerHTML='😴 '+prefix+parts.join(' · ')+(entry.dato===today?'':' — <span style="color:var(--text3)">Logg i dag →</span>');
+}
+
+function toggleHelseForm(){
+  const f=document.getElementById('helse-form');
+  f.style.display=f.style.display==='none'?'block':'none';
+  if(f.style.display==='block'){
+    // Reset selections
+    selectedSovnKval=null;selectedEnergi=null;
+    document.querySelectorAll('.sovn-kval-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.energi-btn').forEach(b=>b.classList.remove('active'));
+  }
+}
+
+function selectSovnKval(btn){
+  document.querySelectorAll('.sovn-kval-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedSovnKval=parseInt(btn.dataset.kval);
+}
+
+function selectEnergi(btn){
+  document.querySelectorAll('.energi-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedEnergi=parseInt(btn.dataset.e);
+}
+
+async function logHelse(){
+  const url=getWorkerUrl();if(!url){alert('Sett Worker URL under Innstillinger');return;}
+  const sovnTimer=document.getElementById('helse-sovn').value;
+  const protein=document.getElementById('helse-protein').value;
+  const vekt=document.getElementById('helse-vekt').value;
+  const notat=document.getElementById('helse-notat').value.trim();
+
+  // Require at least one field
+  if(!sovnTimer&&!protein&&!selectedSovnKval&&!selectedEnergi&&!vekt&&!notat) return;
+
+  const statusEl=document.getElementById('helse-status');
+  statusEl.textContent='Lagrer…';statusEl.style.color='var(--text2)';
+
+  const body={dato:getTodayDate()};
+  if(sovnTimer)    body.sovnTimer=parseFloat(sovnTimer);
+  if(selectedSovnKval) body.sovnKvalitet=selectedSovnKval;
+  if(protein)      body.protein=parseInt(protein);
+  if(selectedEnergi)   body.energi=selectedEnergi;
+  if(vekt)         body.vekt=parseFloat(vekt);
+  if(notat)        body.notat=notat;
+
+  try{
+    const r=await fetch(url+'/api/helse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(r.ok){
+      statusEl.textContent='✓ Logget';statusEl.style.color='var(--accent)';
+      // Add to local cache
+      allHelse.unshift({...body,id:d.id});
+      renderHelseStrip();
+      // Clear form
+      document.getElementById('helse-sovn').value='';
+      document.getElementById('helse-protein').value='';
+      document.getElementById('helse-vekt').value='';
+      document.getElementById('helse-notat').value='';
+      selectedSovnKval=null;selectedEnergi=null;
+      document.querySelectorAll('.sovn-kval-btn,.energi-btn').forEach(b=>b.classList.remove('active'));
+      setTimeout(()=>{document.getElementById('helse-form').style.display='none';statusEl.textContent='';},1200);
+    }else{statusEl.textContent='✗ Feil';statusEl.style.color='var(--danger)';}
+  }catch(e){statusEl.textContent='✗ '+e.message;statusEl.style.color='var(--danger)';}
 }
 
 // ── Goals / Mål ───────────────────────────────────────────────────────────────
@@ -2392,7 +2575,7 @@ fetchOkter()
     return fetchGoals();
   })
   .then(()=>{
-    // Silent background sync — refreshes data if Strava has new activities
+    fetchHelse(); // parallel — don't block Strava sync
     setTimeout(()=>silentSyncStrava(),2000);
   });
 </script>

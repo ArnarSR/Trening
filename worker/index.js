@@ -1,6 +1,7 @@
 const NOTION_API = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 const DB_ID = '953ee9299ea345fb8a3d77cf8237116a';
+const HELSE_DB_ID = '2e5c1e0abf4e4fd69c4c88ae89c32d5f';
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_CAL_API   = 'https://www.googleapis.com/calendar/v3';
@@ -150,6 +151,43 @@ export default {
         if (body.vekt != null)   props['Vekt (kg)']   = { number: body.vekt };
         const createBody = { parent: { database_id: DB_ID }, properties: props, icon: { type: 'emoji', emoji: body.icon || '📝' } };
         const res  = await notionRequest(env, 'POST', '/pages', createBody);
+        const data = await res.json();
+        return json({ ok: true, id: data.id });
+      }
+
+      // GET /api/helse
+      if (path === '/api/helse' && request.method === 'GET') {
+        const res = await notionRequest(env, 'POST', `/databases/${HELSE_DB_ID}/query`, {
+          sorts: [{ property: 'Dato', direction: 'descending' }],
+          page_size: 30,
+        });
+        const data = await res.json();
+        return json({ helse: (data.results || []).map(mapHelsePage) });
+      }
+
+      // POST /api/helse
+      if (path === '/api/helse' && request.method === 'POST') {
+        const body = await request.json();
+        const today = body.dato || new Date().toISOString().split('T')[0];
+        const parts = [];
+        if (body.sovnTimer != null) parts.push(`😴 ${body.sovnTimer}t`);
+        if (body.sovnKvalitet != null) parts.push(['','Dårlig','OK','Bra'][body.sovnKvalitet]||'');
+        if (body.protein != null) parts.push(`🥩 ${body.protein}P`);
+        if (body.energi != null) parts.push(`⚡${body.energi}/5`);
+        const name = parts.join(' · ') || today;
+        const props = {
+          'Name': { title: [{ text: { content: name } }] },
+          'Dato': { date: { start: today } },
+        };
+        if (body.sovnTimer  != null) props['Søvn (timer)']       = { number: body.sovnTimer };
+        if (body.sovnKvalitet != null) props['Søvnkvalitet (1-3)'] = { number: body.sovnKvalitet };
+        if (body.protein    != null) props['Protein (porsjoner)']  = { number: body.protein };
+        if (body.energi     != null) props['Energinivå (1-5)']     = { number: body.energi };
+        if (body.vekt       != null) props['Vekt (kg)']             = { number: body.vekt };
+        if (body.notat) props['Notat'] = { rich_text: [{ text: { content: body.notat } }] };
+        const res = await notionRequest(env, 'POST', '/pages', {
+          parent: { database_id: HELSE_DB_ID }, properties: props,
+        });
         const data = await res.json();
         return json({ ok: true, id: data.id });
       }
@@ -600,6 +638,20 @@ function mapPage(page) {
     vurdering: p['Vurdering']?.rich_text?.[0]?.plain_text || '',
     stravaId: p['Strava ID']?.rich_text?.[0]?.plain_text || '',
     url: page.url,
+  };
+}
+
+function mapHelsePage(page) {
+  const p = page.properties;
+  return {
+    id: page.id,
+    dato: p['Dato']?.date?.start || '',
+    sovnTimer:    p['Søvn (timer)']?.number       ?? null,
+    sovnKvalitet: p['Søvnkvalitet (1-3)']?.number ?? null,
+    protein:      p['Protein (porsjoner)']?.number ?? null,
+    energi:       p['Energinivå (1-5)']?.number    ?? null,
+    vekt:         p['Vekt (kg)']?.number            ?? null,
+    notat:        p['Notat']?.rich_text?.[0]?.plain_text || '',
   };
 }
 

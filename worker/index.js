@@ -8,7 +8,7 @@ const GOOGLE_CAL_API   = 'https://www.googleapis.com/calendar/v3';
 // GCal event color per type
 const TYPE_COLOR = {
   'Sone 2': '2', 'Terskel': '5', 'Bakkeintervall': '11',
-  'Race': '3', 'Styrke': '7', 'Rehab': '9',
+  'Race': '3', 'Styrke': '7', 'Rehab': '9', 'Testløp': '4',
 };
 
 const CORS = {

@@ -168,28 +168,47 @@ export default {
       // POST /api/helse
       if (path === '/api/helse' && request.method === 'POST') {
         const body = await request.json();
-        const today = body.dato || new Date().toISOString().split('T')[0];
-        const parts = [];
-        if (body.sovnTimer != null) parts.push(`😴 ${body.sovnTimer}t`);
-        if (body.sovnKvalitet != null) parts.push(['','Dårlig','OK','Bra'][body.sovnKvalitet]||'');
-        if (body.protein != null) parts.push(`🥩 ${body.protein}P`);
-        if (body.energi != null) parts.push(`⚡${body.energi}/5`);
-        const name = parts.join(' · ') || today;
-        const props = {
-          'Name': { title: [{ text: { content: name } }] },
-          'Dato': { date: { start: today } },
+        const dato = body.dato || new Date().toISOString().split('T')[0];
+
+        // Build shared props
+        const buildHelseProps = (b) => {
+          const parts = [];
+          if (b.sovnTimer   != null) parts.push(`😴 ${b.sovnTimer}t`);
+          if (b.sovnKvalitet != null) parts.push(['','Dårlig','OK','Bra'][b.sovnKvalitet]||'');
+          if (b.protein     != null) parts.push(`🥩 ${b.protein}P`);
+          if (b.energi      != null) parts.push(`⚡${b.energi}/5`);
+          const props = {
+            'Name': { title: [{ text: { content: parts.join(' · ') || dato } }] },
+            'Dato': { date: { start: dato } },
+          };
+          if (b.sovnTimer    != null) props['Søvn (timer)']        = { number: b.sovnTimer };
+          if (b.sovnKvalitet != null) props['Søvnkvalitet (1-3)']  = { number: b.sovnKvalitet };
+          if (b.protein      != null) props['Protein (porsjoner)'] = { number: b.protein };
+          if (b.energi       != null) props['Energinivå (1-5)']    = { number: b.energi };
+          if (b.vekt         != null) props['Vekt (kg)']            = { number: b.vekt };
+          if (b.notat) props['Notat'] = { rich_text: [{ text: { content: b.notat } }] };
+          return props;
         };
-        if (body.sovnTimer  != null) props['Søvn (timer)']       = { number: body.sovnTimer };
-        if (body.sovnKvalitet != null) props['Søvnkvalitet (1-3)'] = { number: body.sovnKvalitet };
-        if (body.protein    != null) props['Protein (porsjoner)']  = { number: body.protein };
-        if (body.energi     != null) props['Energinivå (1-5)']     = { number: body.energi };
-        if (body.vekt       != null) props['Vekt (kg)']             = { number: body.vekt };
-        if (body.notat) props['Notat'] = { rich_text: [{ text: { content: body.notat } }] };
+
+        // Check if an entry already exists for this date — PATCH it if so
+        const existing = await notionRequest(env, 'POST', `/databases/${HELSE_DB_ID}/query`, {
+          filter: { property: 'Dato', date: { equals: dato } },
+          page_size: 1,
+        });
+        const existData = await existing.json();
+        const existPage = existData.results?.[0];
+
+        if (existPage) {
+          const res = await notionRequest(env, 'PATCH', `/pages/${existPage.id}`, { properties: buildHelseProps(body) });
+          const data = await res.json();
+          return json({ ok: true, id: data.id, updated: true });
+        }
+
         const res = await notionRequest(env, 'POST', '/pages', {
-          parent: { database_id: HELSE_DB_ID }, properties: props,
+          parent: { database_id: HELSE_DB_ID }, properties: buildHelseProps(body),
         });
         const data = await res.json();
-        return json({ ok: true, id: data.id });
+        return json({ ok: true, id: data.id, updated: false });
       }
 
       // GET /api/calendar

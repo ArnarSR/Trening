@@ -237,8 +237,7 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   <!-- Recovery strip -->
   <div id="idag-recovery-strip" style="margin:10px 0 6px;cursor:pointer;" onclick="toggleHelseForm()">
     <div id="idag-recovery-content" style="display:flex;align-items:center;gap:8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:10px 14px;">
-      <span style="font-size:13px;">💤</span>
-      <span id="idag-recovery-text" style="font-size:12px;color:var(--text3);flex:1;">Logg søvn &amp; næring →</span>
+      <span id="idag-recovery-text" style="font-size:12px;color:var(--text3);flex:1;">💤 Logg søvn &amp; næring →</span>
     </div>
   </div>
 
@@ -1535,7 +1534,8 @@ async function autoLoadTodayBrief(okt){
 
   // Last helse entry (today or yesterday)
   const today=getTodayDate();
-  const yd=new Date();yd.setDate(yd.getDate()-1);const ydStr=yd.toISOString().slice(0,10);
+  const ydD=new Date();ydD.setDate(ydD.getDate()-1);
+  const ydStr=[ydD.getFullYear(),String(ydD.getMonth()+1).padStart(2,'0'),String(ydD.getDate()).padStart(2,'0')].join('-');
   const lastHelse=allHelse.find(h=>h.dato===today)||allHelse.find(h=>h.dato===ydStr);
   const helseCtx=lastHelse?[
     lastHelse.sovnTimer!=null?`Søvn: ${lastHelse.sovnTimer}t${lastHelse.sovnKvalitet?['','(dårlig)','(ok)','(bra)'][lastHelse.sovnKvalitet]:''}`:null,
@@ -1762,8 +1762,8 @@ function renderHelseStrip(){
   const textEl=document.getElementById('idag-recovery-text');
   if(!textEl)return;
   const today=getTodayDate();
-  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
-  const yd=yesterday.toISOString().slice(0,10);
+  const ydDate=new Date();ydDate.setDate(ydDate.getDate()-1);
+  const yd=[ydDate.getFullYear(),String(ydDate.getMonth()+1).padStart(2,'0'),String(ydDate.getDate()).padStart(2,'0')].join('-');
 
   // Find today's or yesterday's entry
   const entry=allHelse.find(h=>h.dato===today)||allHelse.find(h=>h.dato===yd);
@@ -1784,9 +1784,9 @@ function renderHelseStrip(){
   if(entry.energi!=null) parts.push(`⚡ ${entry.energi}/5`);
   if(entry.vekt!=null) parts.push(`⚖ ${entry.vekt}kg`);
 
-  const prefix=entry.dato===today?'I dag: ':'I natt: ';
   textEl.style.color='var(--text2)';
-  textEl.innerHTML='😴 '+prefix+parts.join(' · ')+(entry.dato===today?'':' — <span style="color:var(--text3)">Logg i dag →</span>');
+  const suffix=entry.dato===today?'':' — <span style="color:var(--text3)">Logg i dag →</span>';
+  textEl.innerHTML='😴 I natt: '+parts.join(' · ')+suffix;
 }
 
 function toggleHelseForm(){

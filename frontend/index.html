@@ -2323,5 +2323,24 @@ fetchOkter()
     setTimeout(()=>silentSyncStrava(),2000);
   });
 </script>
+<script>
+// ── Service worker ────────────────────────────────────────────────────────────
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/Trening/service-worker.js').then(reg=>{
+    reg.addEventListener('updatefound',()=>{
+      const sw=reg.installing;
+      sw.addEventListener('statechange',()=>{
+        if(sw.state==='installed'&&navigator.serviceWorker.controller){
+          // New version ready — show update banner
+          const b=document.createElement('div');
+          b.style.cssText='position:fixed;bottom:0;left:0;right:0;background:var(--accent);color:#0f0f0f;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:9999;font-size:13px;font-weight:600;';
+          b.innerHTML='<span>🔄 Ny versjon klar</span><button onclick="location.reload()" style="background:#0f0f0f;color:var(--accent);border:none;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Oppdater nå</button>';
+          document.body.appendChild(b);
+        }
+      });
+    });
+  });
+}
+</script>
 </body>
 </html>

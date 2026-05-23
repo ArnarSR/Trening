@@ -1529,47 +1529,72 @@ async function autoLoadTodayBrief(okt){
   aiBox.className='analysis-box loading';
   aiBox.textContent='Forbereder coaching-brief…';
 
-  const recent=allOkter
-    .filter(o=>o.status==='Gjennomført'&&o.dato&&o.varighet&&o.type!=='Dagbok'&&o.type!=='Mål')
-    .slice(0,5)
-    .map(o=>`${o.dato}: ${o.sport||o.type} — HR ${o.faktiskSnittHR||'?'}, ${o.varighet}min${o.distance?' ('+o.distance+'km)':''}${o.smerte!=null?', smerte:'+o.smerte:''}`)
-    .join('\n');
+  // Dynamic profile
+  const _zStr=(typeof ZONES!=='undefined'&&ZONES.length)?ZONES.map(z=>`${z.n}: ${z.min===0?'<'+z.max:z.max===999?z.min+'+':z.min+'–'+z.max}`).join(' | '):'';
+  const _ktx=typeof treningskontekst!=='undefined'?treningskontekst:'';
+  const prinsipper=planPrinsipper||localStorage.getItem('fase_prinsipper')||'';
+
+  // 7-day sleep & nutrition history (oldest first so trend reads naturally)
+  const helseHistorikk=allHelse.slice(0,7).reverse().map(h=>{
+    const p=[];
+    if(h.sovnTimer!=null)p.push(`${h.sovnTimer}t søvn${h.sovnKvalitet?['','(dårlig)','(ok)','(bra)'][h.sovnKvalitet]:''}`);
+    if(h.energi!=null)p.push(`energi ${h.energi}/5`);
+    if(h.protein!=null)p.push(`protein ${h.protein}g`);
+    if(h.vekt!=null)p.push(`${h.vekt}kg`);
+    return `${h.dato}: ${p.join(', ')||'—'}`;
+  }).join('\n');
+
+  // Training load
   const acl=computeACL();
+  const weekKm=computeWeeklyKm();
+
+  // Last 7 completed sessions
+  const recent=allOkter
+    .filter(o=>o.status==='Gjennomført'&&o.dato&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .slice(0,7)
+    .map(o=>`${o.dato}: ${o.sport||o.type} ${o.varighet||'?'}min — snitt HR ${o.faktiskSnittHR||'?'}${o.distance?' ('+o.distance+'km)':''}${o.smerte!=null?' smerte:'+o.smerte:''}`)
+    .join('\n');
+
+  // Dagbok notes
   const recentDagbok=allOkter
     .filter(o=>o.type==='Dagbok')
     .sort((a,b)=>b.dato.localeCompare(a.dato))
     .slice(0,3)
     .map(o=>`${o.dato}: ${o.vurdering||o.navn}${o.smerte!=null?' (smerte:'+o.smerte+')':''}`)
     .join('\n');
-  const prinsipper=planPrinsipper||localStorage.getItem('fase_prinsipper')||'';
 
-  // Last helse entry (today or yesterday)
+  // Upcoming goals/races
   const today=getTodayDate();
-  const ydD=new Date();ydD.setDate(ydD.getDate()-1);
-  const ydStr=[ydD.getFullYear(),String(ydD.getMonth()+1).padStart(2,'0'),String(ydD.getDate()).padStart(2,'0')].join('-');
-  const lastHelse=allHelse.find(h=>h.dato===today)||allHelse.find(h=>h.dato===ydStr);
-  const helseCtx=lastHelse?[
-    lastHelse.sovnTimer!=null?`Søvn: ${lastHelse.sovnTimer}t${lastHelse.sovnKvalitet?['','(dårlig)','(ok)','(bra)'][lastHelse.sovnKvalitet]:''}`:null,
-    lastHelse.protein!=null?`Protein: ${lastHelse.protein}/6P`:null,
-    lastHelse.energi!=null?`Energinivå: ${lastHelse.energi}/5`:null,
-  ].filter(Boolean).join(', '):'';
+  const upcomingGoals=allGoals
+    .filter(g=>g.status!=='Gjennomført'&&g.dato>=today)
+    .sort((a,b)=>a.dato.localeCompare(b.dato))
+    .slice(0,3)
+    .map(g=>`${g.dato}: ${g.navn}`)
+    .join('\n');
 
-  const prompt=`Du er treneren til Arnar. Skriv en økt-brief på norsk (3–4 setninger) for dagens planlagte økt.
+  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.
+HR-soner: ${_zStr||'ukjent'}.${_ktx?'\n\nUtøverprofil:\n'+_ktx:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
 
-Dagens økt: ${okt.navn}
-Type: ${okt.type||'—'} | Varighet: ${okt.varighet||'?'}min | Mål-HR: ${okt.planlagtPuls||'—'}
+DAGENS PLANLAGTE ØKT
+${okt.navn} — ${okt.type||'—'}, ${okt.varighet||'?'}min${okt.planlagtPuls?', mål-HR: '+okt.planlagtPuls:''}
 ${okt.vurdering?'Beskrivelse: '+okt.vurdering:''}
 
-${acl!==null?`Akutt:Kronisk belastning: ${acl.toFixed(2)} (${acl<0.8?'undertrent':acl<1.3?'optimal':acl<1.5?'noe høy':'OBS: for høy!'})`:''}
-${helseCtx?'Restitusjon: '+helseCtx:''}
+BELASTNING
+${acl!==null?`Akutt:Kronisk ratio: ${acl.toFixed(2)} (${acl<0.8?'undertrent':acl<1.3?'optimal':acl<1.5?'noe høy':'OBS: for høy!'})`:''} ${weekKm?'| Uke-km: '+weekKm.toFixed(1)+'km':''}
 
-Siste 5 gjennomførte:
+SØVN, ERNÆRING & ENERGI (siste 7 dager)
+${helseHistorikk||'(ingen data logget)'}
+
+SISTE GJENNOMFØRTE ØKTER
 ${recent||'(ingen enda)'}
+${recentDagbok?'\nDAGBOK\n'+recentDagbok:''}
+${upcomingGoals?'\nKOMMENDE MÅL/LØYPER\n'+upcomingGoals:''}
 
-${recentDagbok?'Helse/dagbok:\n'+recentDagbok:''}
-${prinsipper?'\nFase-prinsipper:\n'+prinsipper:''}
-
-Skriv BARE brief-teksten — ingen overskrift, ingen intro. Konkret, motiverende, direkte på norsk. Hvis søvnen er kort (<5t), juster intensitetsanbefalingen.`;
+Skriv en coaching-brief på norsk (4–6 setninger) for dagen. Vurder:
+1. Restitusjons-status ut fra søvntrend og belastning de siste dagene — juster anbefalt intensitet deretter
+2. Konkret intensitetsguidance for dagens økt med spesifikke HR-tall fra sonene over
+3. Et konkret råd om ernæring eller forberedelse basert på protein/energidata
+Skriv BARE brief-teksten — ingen overskrift. Direkte, motiverende, konkret.`;
 
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});

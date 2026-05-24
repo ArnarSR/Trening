@@ -1761,6 +1761,9 @@ function renderIdagView(){
   const aiBox=document.getElementById('idag-ai-text');
   const aiStatus=document.getElementById('idag-ai-status');
 
+  // Always compute and display nutrition targets immediately (pure JS, no API)
+  displayNutritionTargets(loadNutritionTargets(todayOkt));
+
   if(todayOkt){
     dailySection.innerHTML=renderIdagOktRow(todayOkt,true);
     if(todayOkt.status==='Gjennomført'){
@@ -1873,6 +1876,10 @@ function sessionKm(o){
   return null;
 }
 
+function isRunSession(o){
+  const sp=String(o.sport||'');const t=String(o.type||'');
+  return sp.includes('Løp')||t==='Race'||t==='Testløp';
+}
 function computeWeeklyKm(){
   const now=new Date();
   // Week starts Monday
@@ -1880,7 +1887,7 @@ function computeWeeklyKm(){
   const monday=new Date(now);monday.setDate(now.getDate()-dayOfWeek);monday.setHours(0,0,0,0);
   let total=0;
   allOkter
-    .filter(o=>o.status==='Gjennomført'&&new Date(o.dato+'T12:00:00')>=monday&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .filter(o=>o.status==='Gjennomført'&&new Date(o.dato+'T12:00:00')>=monday&&isRunSession(o))
     .forEach(o=>{const km=sessionKm(o);if(km)total+=km;});
   return Math.round(total*10)/10;
 }

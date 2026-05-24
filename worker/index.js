@@ -20,15 +20,30 @@ Retningslinjer du alltid følger:
 • Aldri anbefal to harde økter på rad uten restitusjonøkt imellom
 • Vær direkte og konkret — unngå vage fraser som "lytt til kroppen"
 
+Håndsystemet for ernæring — bruk dette når du beregner nutrition-feltet:
+• 🤜 NEVE = karbohydrater (ris, pasta, havre, brød, frukt)
+• ✋ HÅNDFLATESTØRRELSE = protein (kylling, fisk, kjøtt, egg, tofu)
+• 👊 KNYTTNEVE = grønnsaker
+• 👍 TOMMEL = fett (nøtter, olje, avokado, smør)
+
+Daglige basisporsjoner (menn): 2 palmer protein, 2 never karbo, 2 knyttnever grønt, 2 tomler fett.
+Juster etter treningsbelastning:
+• Hviledag / lett økt (S1): −1 neve karbo
+• Moderat økt (S2–S3, 45–75 min): standardporsjon
+• Hard økt / intervall (S4–S5 eller >75 min): +1 neve karbo, +0.5 palmer protein
+• Styrkeøkt: +1 palm protein, standard karbo
+• Doble treningsdager: +1 neve karbo per ekstraøkt
+
 Lengdekrav per felt — overhold disse:
 • summary: maks 2 setninger
 • loadAssessment: ett ord + én setning (f.eks. "Moderat — intensiteten var kontrollert")
 • recoveryStatus: én setning
 • nextSessionRecommendation: én konkret setning med type, varighet og intensitet
 • motivation: én setning, maks 15 ord
+• nutrition.notat: én setning med kontekstuelt ernæringstips (f.eks. "Spis karboene innen 30 min etter intervalløkten")
 
 Du svarer ALLTID med gyldig JSON og INGEN ANNEN TEKST. Nøyaktig dette formatet:
-{"summary":"...","loadAssessment":"...","recoveryStatus":"...","nextSessionRecommendation":"...","motivation":"..."}\
+{"summary":"...","loadAssessment":"...","recoveryStatus":"...","nextSessionRecommendation":"...","motivation":"...","nutrition":{"protein":2,"karbo":2,"gront":2,"fett":2,"notat":"..."}}\
 `;
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -360,6 +375,7 @@ export default {
             summary: rawText,
             loadAssessment: '—', recoveryStatus: '—',
             nextSessionRecommendation: '—', motivation: '—',
+            nutrition: { protein: 2, karbo: 2, gront: 2, fett: 2, notat: '' },
           });
         }
 
@@ -1015,9 +1031,15 @@ function buildStructuredMessage(okt, sovn, hrv, historikk) {
  */
 function parseStructuredResponse(text) {
   const REQUIRED = ['summary', 'loadAssessment', 'recoveryStatus', 'nextSessionRecommendation', 'motivation'];
+  const DEFAULT_NUTRITION = { protein: 2, karbo: 2, gront: 2, fett: 2, notat: '' };
 
   const finalize = (parsed) => {
     REQUIRED.forEach(k => { if (!parsed[k]) parsed[k] = '—'; });
+    if (!parsed.nutrition || typeof parsed.nutrition !== 'object') {
+      parsed.nutrition = { ...DEFAULT_NUTRITION };
+    } else {
+      parsed.nutrition = { ...DEFAULT_NUTRITION, ...parsed.nutrition };
+    }
     return parsed;
   };
 

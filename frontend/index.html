@@ -605,6 +605,11 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
         <input type="text" class="setting-input" id="s-worker-url" placeholder="https://trening-arnar.trening-arnar.workers.dev" oninput="saveSettings()">
       </div>
       <div class="sep"></div>
+      <div class="setting-row">
+        <span class="setting-label">API Token</span>
+        <input type="password" class="setting-input" id="s-api-token" placeholder="Valgfritt — sett med: wrangler secret put API_TOKEN" oninput="saveSettings()">
+      </div>
+      <div class="sep"></div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-sm" onclick="testWorker()">Test tilkobling</button>
         <span id="worker-test-result" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
@@ -1069,14 +1074,32 @@ let selectedEnergi = null;
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 function getWorkerUrl(){try{return localStorage.getItem('worker_url')||'';}catch(e){return '';}}
+function getApiToken(){try{return localStorage.getItem('api_token')||'';}catch(e){return '';}}
 function saveSettings(){
-  try{localStorage.setItem('worker_url',document.getElementById('s-worker-url').value.trim());}catch(e){}
+  try{
+    localStorage.setItem('worker_url',document.getElementById('s-worker-url').value.trim());
+    localStorage.setItem('api_token',(document.getElementById('s-api-token')||{}).value?.trim()||'');
+  }catch(e){}
   updateDots();
 }
 function loadSettings(){
   try{document.getElementById('s-worker-url').value=localStorage.getItem('worker_url')||'';}catch(e){}
+  try{const el=document.getElementById('s-api-token');if(el)el.value=localStorage.getItem('api_token')||'';}catch(e){}
   updateDots();
 }
+// Auto-inject Bearer token on all worker API calls
+(function(){
+  const _f=window.fetch.bind(window);
+  window.fetch=function(input,init){
+    init=init||{};
+    const wUrl=getWorkerUrl();
+    if(wUrl&&typeof input==='string'&&input.startsWith(wUrl)){
+      const tok=getApiToken();
+      if(tok){const h=Object.assign({'Authorization':'Bearer '+tok},init.headers||{});init=Object.assign({},init,{headers:h});}
+    }
+    return _f(input,init);
+  };
+})();
 function saveCalSettings(){
   try{localStorage.setItem('cal_id',document.getElementById('s-cal-id').value.trim()||'primary');}catch(e){}
 }
@@ -1349,8 +1372,9 @@ function updateStats(){
   const countEl=document.getElementById('okt-count');if(countEl)countEl.textContent=done;
   const fase=localStorage.getItem('fase_navn')||'—';
   const faseSub=(localStorage.getItem('fase_prinsipper')||'').split('\n')[0].replace(/^[•\-]\s*/,'')||'Aktiv restitusjon';
+  const paceToSec=p=>{const[m,s]=(p||'').split(':');return m&&s?+m*60+ +s:Infinity;};
   const prSessions=allOkter.filter(o=>(o.type==='Testløp'||o.type==='Race')&&o.status==='Gjennomført'&&o.pace);
-  prSessions.sort((a,b)=>a.pace.localeCompare(b.pace));
+  prSessions.sort((a,b)=>paceToSec(a.pace)-paceToSec(b.pace));
   const bestPR=prSessions[0];
   const prText=bestPR?bestPR.pace+'/km':'—';
   const prSub=bestPR?esc(bestPR.navn)+' · '+formatDato(bestPR.dato)+' 🏆':'Ingen race ennå';
@@ -1734,13 +1758,16 @@ function updateIdagStats(){
 
 // ── Silent auto-sync ──────────────────────────────────────────────────────────
 async function silentSyncStrava(){
+  const today=new Date().toISOString().slice(0,10);
+  const last=localStorage.getItem('last_silent_sync');
+  if(last&&last.slice(0,10)===today)return; // already synced today
   const url=getWorkerUrl();if(!url)return;
   try{
     const r=await fetch(url+'/api/sync',{method:'POST'});
     const d=await r.json();
-    if(r.ok&&(d.created>0||d.synced>0)){
-      await fetchOkter();
-      checkForFeedbackNeeded();
+    if(r.ok){
+      localStorage.setItem('last_silent_sync',new Date().toISOString());
+      if(d.created>0||d.synced>0){await fetchOkter();checkForFeedbackNeeded();}
     }
   }catch(e){} // silent
 }

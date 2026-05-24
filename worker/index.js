@@ -83,18 +83,29 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    const authErr = requireAuth(request, env);
+    if (authErr) return authErr;
+
     try {
-      // GET /api/okter
+      // GET /api/okter — paginated cursor loop
       if (path === '/api/okter' && request.method === 'GET') {
-        const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
-          sorts: [{ property: 'Dato', direction: 'descending' }],
-          page_size: 100,
-        });
-        const data = await res.json();
-        if (!res.ok || !data.results) {
-          return json({ error: 'Notion feil', detail: data }, res.status || 500);
-        }
-        return json({ okter: data.results.map(mapPage) });
+        const pages = [];
+        let cursor;
+        do {
+          const body = {
+            sorts: [{ property: 'Dato', direction: 'descending' }],
+            page_size: 100,
+          };
+          if (cursor) body.start_cursor = cursor;
+          const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, body);
+          const data = await res.json();
+          if (!res.ok || !data.results) {
+            return json({ error: 'Notion feil', detail: data }, res.status || 500);
+          }
+          pages.push(...data.results);
+          cursor = data.has_more ? data.next_cursor : null;
+        } while (cursor);
+        return json({ okter: pages.map(mapPage) });
       }
 
       // PATCH /api/okter/:id
@@ -555,6 +566,14 @@ async function debugLastActivity(env) {
       };
     }),
   });
+}
+
+function requireAuth(request, env) {
+  if (!env.API_TOKEN) return null; // not configured — allow all (opt-in)
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (token !== env.API_TOKEN) return json({ error: 'Unauthorized' }, 401);
+  return null;
 }
 
 async function queryNotionSince(env, since) {

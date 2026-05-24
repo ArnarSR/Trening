@@ -305,10 +305,10 @@ export default {
         return getCalendarEvents(env, from, to);
       }
 
-      // POST /api/plan/create
-      if (path === '/api/plan/create' && request.method === 'POST') {
+      // POST /api/plan/apply — create, update or delete sessions (replaces /api/plan/create)
+      if ((path === '/api/plan/apply' || path === '/api/plan/create') && request.method === 'POST') {
         const { sessions } = await request.json();
-        return createPlanSessions(env, sessions || []);
+        return applyPlanSessions(env, sessions || []);
       }
 
       // POST /api/sync
@@ -746,52 +746,70 @@ async function getCalendarEvents(env, from, to) {
   }
 }
 
-async function createPlanSessions(env, sessions) {
-  if (!sessions.length) return json({ created: 0, notionIds: [], calendarIds: [] });
-  const capped = sessions.slice(0, 7); // max 7 to stay under subrequest limit
+async function applyPlanSessions(env, sessions) {
+  if (!sessions.length) return json({ created: 0, updated: 0, deleted: 0, notionIds: [], calendarIds: [] });
+  const capped = sessions.slice(0, 14); // allow up to 14 ops (2 per day × 7 days)
 
   let token;
   try { token = await getServiceAccountToken(env); } catch (_) { token = null; }
 
   const calId = encodeURIComponent(env.GOOGLE_CALENDAR_ID?.trim() || 'primary');
   const notionIds = [], calendarIds = [];
-  let created = 0;
+  let created = 0, updated = 0, deleted = 0;
 
   for (const s of capped) {
+    const action = s.action || (s.id ? 'update' : 'create');
     const sport = s.sport || '';
     const notionSport = Object.values(SPORT_MAP).find(v => sport.includes(v.icon));
 
-    // Notion page
-    const props = {
-      'Navn':  { title: [{ text: { content: s.navn || 'Planlagt økt' } }] },
-      'Dato':  { date:  { start: s.dato } },
-      'Status': { select: { name: 'To Do' } },
-    };
-    if (s.type)         props['Type']            = { select: { name: s.type } };
-    if (s.varighet)     props['Varighet (min)']  = { number: Number(s.varighet) };
-    if (s.planlagtPuls) props['Planlagt puls']   = { rich_text: [{ text: { content: s.planlagtPuls } }] };
-    if (notionSport)    props['Sport']           = { select: { name: notionSport.type } };
+    if (action === 'delete' && s.id) {
+      // Archive the Notion page
+      const res = await notionRequest(env, 'PATCH', `/pages/${s.id}`, { archived: true });
+      if (res.ok) { deleted++; await env.SETTINGS.delete('okter_cache'); }
+      continue;
+    }
 
+    // Build Notion props (shared for create + update)
+    const props = {};
+    if (s.navn)        props['Navn']           = { title: [{ text: { content: s.navn } }] };
+    if (s.dato)        props['Dato']           = { date: { start: s.dato } };
+    if (s.type)        props['Type']           = { select: { name: s.type } };
+    if (s.varighet)    props['Varighet (min)'] = { number: Number(s.varighet) };
+    if (s.planlagtPuls)props['Planlagt puls']  = { rich_text: [{ text: { content: s.planlagtPuls } }] };
+    if (notionSport)   props['Sport']          = { select: { name: notionSport.type } };
+    if (s.vurdering)   props['Vurdering']      = { rich_text: [{ text: { content: s.vurdering } }] };
+
+    if (action === 'update' && s.id) {
+      // PATCH existing session
+      const patchBody = { properties: props };
+      if (notionSport) patchBody.icon = { type: 'emoji', emoji: notionSport.icon };
+      const res = await notionRequest(env, 'PATCH', `/pages/${s.id}`, patchBody);
+      if (res.ok) { updated++; await env.SETTINGS.delete('okter_cache'); }
+      continue;
+    }
+
+    // CREATE new session
+    props['Status'] = { select: { name: 'To Do' } };
+    if (!props['Navn']) props['Navn'] = { title: [{ text: { content: 'Planlagt økt' } }] };
     const createBody = { parent: { database_id: env.DB_ID }, properties: props };
     if (notionSport) createBody.icon = { type: 'emoji', emoji: notionSport.icon };
 
     const nRes  = await notionRequest(env, 'POST', '/pages', createBody);
     const nData = await nRes.json();
-    if (!nRes.ok) { created++; continue; }
-    if (nData.id) notionIds.push(nData.id);
+    if (!nRes.ok) continue;
+    if (nData.id) { notionIds.push(nData.id); await env.SETTINGS.delete('okter_cache'); }
 
-    // GCal event
-    if (token) {
+    // GCal event for new sessions only
+    if (token && s.dato) {
       const sportEmoji = sport.split(' ')[0] || '';
       const descLines = [
-        s.type         ? `Type: ${s.type}`           : '',
-        s.planlagtPuls ? `Mål-HR: ${s.planlagtPuls}` : '',
-        s.varighet     ? `Varighet: ${s.varighet} min`: '',
+        s.type          ? `Type: ${s.type}`            : '',
+        s.planlagtPuls  ? `Mål-HR: ${s.planlagtPuls}`  : '',
+        s.varighet      ? `Varighet: ${s.varighet} min` : '',
         '',
-        s.beskrivelse  || '',
+        s.beskrivelse   || '',
       ].filter((l, i) => i >= 3 || l).join('\n').trim();
 
-      // next-day end date for GCal all-day event
       const endDate = new Date(s.dato);
       endDate.setDate(endDate.getDate() + 1);
       const endStr = endDate.toISOString().split('T')[0];
@@ -812,7 +830,7 @@ async function createPlanSessions(env, sessions) {
     created++;
   }
 
-  return json({ created, notionIds, calendarIds });
+  return json({ created, updated, deleted, notionIds, calendarIds });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

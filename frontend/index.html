@@ -542,7 +542,7 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     <div style="display:flex;gap:8px;align-items:center;">
       <button class="btn btn-accent" id="plan-send-btn" onclick="sendPlanMelding()" style="flex:1;">Send</button>
       <button class="btn btn-sm" onclick="clearPlanChat()">Tøm</button>
-      <button class="btn btn-sm" id="plan-save-btn" onclick="savePlanToNotion()" style="display:none;">→ Notion</button>
+      <button class="btn btn-sm btn-accent" id="plan-save-btn" onclick="applyPendingPlan()" style="display:none;">Oppdater treningsplan</button>
     </div>
   </div>
 </div>
@@ -2954,8 +2954,8 @@ async function sendPlanMelding(){
     ].filter(Boolean).join(' · ')
   ).join('\n');
 
-  const planlagtLines=planlagt.slice(0,14).map(o=>
-    `${o.dato||'?'}: ${o.navn} — ${o.type||'?'}${o.varighet?' ('+o.varighet+' min)':''}`
+  const planlagtLines=planlagt.slice(0,20).map(o=>
+    `[${o.id}] ${o.dato||'?'}: ${o.navn} — ${o.type||'?'}${o.varighet?' ('+o.varighet+' min)':''}${o.planlagtPuls?' HR:'+o.planlagtPuls:''}`
   ).join('\n');
 
   const calLines=planCalendarEvents.map(e=>`${e.date}: ${e.title}`).join('\n');
@@ -3001,18 +3001,19 @@ ${oktLines||'(ingen)'}
 ${dagbokCtx?`\nDAGBOK / HELSE-LOG (siste 14 dager):\n${dagbokCtx}`:''}
 ${planSumLines?`\nTIDLIGERE PLANER:\n${planSumLines}`:''}
 
-Når du lager en plan, output ALLTID et JSON-blokk slik:
+Når du lager eller endrer en plan, output ALLTID et JSON-blokk. Hvert element kan ha action: "create" (ny), "update" (endre eksisterende) eller "delete" (fjern). For update/delete: bruk "id" fra [id] i listen over planlagte økter.
 \`\`\`json
 { "sessions": [
-    { "dato": "YYYY-MM-DD", "navn": "Navn på økt", "type": "Sone 2",
-      "sport": "🏃 Løp", "varighet": 45, "planlagtPuls": "120-145",
-      "beskrivelse": "Kort instruksjon" }
+    { "action": "create", "dato": "YYYY-MM-DD", "navn": "Navn", "type": "Sone 2", "sport": "🏃 Løp", "varighet": 45, "planlagtPuls": "120-145", "beskrivelse": "Instruksjon" },
+    { "action": "update", "id": "eksisterende-notion-id", "dato": "YYYY-MM-DD", "navn": "Oppdatert navn", "type": "Terskel", "varighet": 50 },
+    { "action": "delete", "id": "eksisterende-notion-id", "navn": "Økt som fjernes" }
   ],
-  "summary": "Begrunnelse for planen"
+  "summary": "Kort begrunnelse"
 }
 \`\`\`
-Inkluder kun neste 7 dager. Ikke dupliser datoer som allerede er planlagt. For analyse/diskusjon uten å lage plan, svar normalt uten JSON.
-Svar på norsk, konkret og strukturert.`;
+Gyldige type-verdier: Sone 2, Terskel, Bakkeintervall, Styrke, Rehab, Race, Testløp.
+For analyse/diskusjon uten planendring: svar normalt uten JSON-blokk.
+Svar på norsk, vær konkret og direkte.`;
 
   const historyLines=planHistory.slice(0,-1).map(m=>(m.role==='user'?'Arnar':'Trener')+': '+m.content).join('\n\n');
   const fullPrompt=systemCtx+(historyLines?`\n\nTidligere samtale:\n${historyLines}`:'')+`\n\nArnar: ${msg}\nTrener:`;
@@ -3056,23 +3057,59 @@ function renderPlanPreview(sessions){
   const chat=document.getElementById('plan-chat');
   const preview=document.createElement('div');
   preview.className='plan-preview';
+  const actionIcon={create:'＋',update:'✎',delete:'✕'};
+  const actionColor={create:'var(--accent)',update:'var(--info,#7eb8f7)',delete:'var(--danger,#f77)'};
+  const creates=sessions.filter(s=>(s.action||'create')==='create').length;
+  const updates=sessions.filter(s=>s.action==='update').length;
+  const deletes=sessions.filter(s=>s.action==='delete').length;
+  const summary=[creates&&`${creates} ny`,updates&&`${updates} endret`,deletes&&`${deletes} fjernet`].filter(Boolean).join(', ');
   const rows=sessions.map(s=>{
+    const act=s.action||(s.id?'update':'create');
     const dato=s.dato?formatDato(s.dato):'?';
     const meta=[s.varighet?s.varighet+' min':'',s.type||''].filter(Boolean).join(' · ');
     const sport=s.sport?s.sport.split(' ')[0]:'';
-    return `<div class="plan-preview-row">
+    return `<div class="plan-preview-row" style="${act==='delete'?'opacity:.5;text-decoration:line-through;':''}">
+      <span style="font-size:10px;width:14px;color:${actionColor[act]||'inherit'};flex-shrink:0;">${actionIcon[act]||''}</span>
       <span class="plan-preview-date">${dato}</span>
-      <span class="plan-preview-name">${sport?sport+' ':''}<strong>${esc(s.navn)}</strong></span>
+      <span class="plan-preview-name">${sport?sport+' ':''}<strong>${esc(s.navn||'—')}</strong></span>
       <span class="plan-preview-meta">${esc(meta)}</span>
     </div>`;
   }).join('');
-  preview.innerHTML=`<div class="plan-preview-title">📅 ${sessions.length} planlagte økter</div>${rows}
+  preview.innerHTML=`<div class="plan-preview-title">📅 ${summary}</div>${rows}
     <div style="margin-top:10px;">
-      <button class="btn btn-accent btn-sm" id="plan-create-btn" onclick="createPlanSessions(window._pendingSessions)" style="width:100%;justify-content:center;">Opprett i Notion + Kalender →</button>
+      <button class="btn btn-accent btn-sm" id="plan-create-btn" onclick="applyPendingPlan()" style="width:100%;justify-content:center;">Oppdater treningsplan →</button>
     </div>`;
   window._pendingSessions=sessions;
+  document.getElementById('plan-save-btn').style.display='inline-flex';
   chat.appendChild(preview);
   chat.scrollTop=chat.scrollHeight;
+}
+
+async function applyPendingPlan(){
+  const sessions=window._pendingSessions;
+  if(!sessions||!sessions.length){showToast('Ingen plan å oppdatere','err');return;}
+  const url=getWorkerUrl();
+  if(!url){showToast('Sett Worker URL','err');showView('innstillinger');return;}
+  const btn=document.getElementById('plan-create-btn');
+  const topBtn=document.getElementById('plan-save-btn');
+  [btn,topBtn].forEach(b=>{if(b){b.disabled=true;b.innerHTML='<span class="spinner"></span> Oppdaterer…';}});
+  try{
+    const r=await fetch(url+'/api/plan/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessions})});
+    const d=await r.json();
+    if(r.ok){
+      const parts=[d.created&&`${d.created} opprettet`,d.updated&&`${d.updated} oppdatert`,d.deleted&&`${d.deleted} fjernet`].filter(Boolean).join(', ');
+      const label=`✓ ${parts||'Ferdig'}`;
+      [btn,topBtn].forEach(b=>{if(b){b.textContent=label;b.style.cssText='background:rgba(200,240,96,0.12);color:var(--accent);border-color:var(--accent);'+(b===btn?'width:100%;justify-content:center;':'');}});
+      window._pendingSessions=null;
+      await fetchOkter();
+      await loadPlanContext();
+    }else{
+      const msg='✗ '+(d.error||r.status);
+      [btn,topBtn].forEach(b=>{if(b){b.textContent=msg;b.disabled=false;}});
+    }
+  }catch(e){
+    [btn,topBtn].forEach(b=>{if(b){b.textContent='✗ '+e.message;b.disabled=false;}});
+  }
 }
 
 async function createPlanSessions(sessions){
@@ -3099,7 +3136,8 @@ function clearPlanChat(){
   window._pendingSessions=null;
   const chat=document.getElementById('plan-chat');
   chat.innerHTML='';
-  document.getElementById('plan-save-btn').style.display='none';
+  const btn=document.getElementById('plan-save-btn');
+  if(btn){btn.style.display='none';btn.textContent='Oppdater treningsplan';btn.disabled=false;}
   showPlanEmpty();
 }
 

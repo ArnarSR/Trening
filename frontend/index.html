@@ -646,6 +646,30 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     </div>
   </div>
   <div class="settings-section">
+    <div class="settings-title">Skader &amp; rehab</div>
+    <div class="settings-card">
+      <div class="form-field" style="margin-bottom:12px;">
+        <label class="form-label">Aktive skader / svakheter</label>
+        <textarea class="setting-input" id="s-skader" rows="3" oninput="onInjuryInput()"
+          placeholder="Beskriv aktive skader, svakheter eller områder du er forsiktig med..."
+          style="resize:vertical;min-height:72px;font-family:var(--sans);font-size:12px;line-height:1.6;"></textarea>
+      </div>
+      <div class="form-field" style="margin-bottom:14px;">
+        <label class="form-label">Rehabiliteringsstatus</label>
+        <select class="setting-input" id="s-rehab-status" onchange="onInjuryInput()">
+          <option value="ingen">Ingen aktive skader</option>
+          <option value="rehab">Under aktiv rehab</option>
+          <option value="forsiktig">Vedlikehold/forsiktig</option>
+          <option value="friskmeldt">Friskmeldt (følger med)</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-sm btn-accent" onclick="saveInjurySettings()">Lagre</button>
+        <span id="injury-save-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
     <div class="settings-title">Strava-synk</div>
     <div class="settings-card">
       <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Henter siste 80 aktiviteter fra Strava og matcher mot Notion på dato. Oppdaterer HR, pace, varighet og sport. Oppretter nye sider for aktiviteter uten match.</div>
@@ -809,12 +833,22 @@ async function saveSportsSettings() {
   } catch (e) { status.textContent = '✗ ' + e.message; }
 }
 
+function _applyInjuryData(skader, rehab) {
+  skaderTekst = skader || '';
+  rehabStatus = rehab || 'ingen';
+  const ta = document.getElementById('s-skader');
+  const sel = document.getElementById('s-rehab-status');
+  if (ta) ta.value = skaderTekst;
+  if (sel) sel.value = rehabStatus;
+}
+
 async function loadSportsSettings() {
   // Optimistic load from localStorage, then refresh from KV
   const lsActive = localStorage.getItem('sports_active');
   const lsFocus  = localStorage.getItem('sports_focus');
   if (lsActive) { try { activeSports = new Set(JSON.parse(lsActive)); } catch(_){} }
   if (lsFocus)  focusSport = lsFocus || null;
+  _applyInjuryData(localStorage.getItem('injury_skader'), localStorage.getItem('injury_rehab'));
   renderSportsGrid();
 
   const url = getWorkerUrl(); if (!url) return;
@@ -826,6 +860,9 @@ async function loadSportsSettings() {
     focusSport = d.focus || null;
     localStorage.setItem('sports_active', JSON.stringify([...activeSports]));
     localStorage.setItem('sports_focus', focusSport || '');
+    _applyInjuryData(d.skader, d.rehabStatus);
+    localStorage.setItem('injury_skader', skaderTekst);
+    localStorage.setItem('injury_rehab', rehabStatus);
     renderSportsGrid();
   } catch (_) {}
 }
@@ -835,6 +872,47 @@ function getSportsContext() {
   const fl = ALL_SPORTS.find(s => s.key === focusSport);
   const activeLabels = ALL_SPORTS.filter(s => activeSports.has(s.key)).map(s => s.label).join(', ');
   return `Aktive treningsformer: ${activeLabels}.${fl ? ' Fokussport (primær): ' + fl.label + '.' : ''}`;
+}
+
+// ── Injury / rehab settings ───────────────────────────────────────────────────
+let skaderTekst = '';
+let rehabStatus = 'ingen';
+
+const REHAB_LABELS = {
+  ingen: 'Ingen aktive skader',
+  rehab: 'Under aktiv rehab',
+  forsiktig: 'Vedlikehold/forsiktig',
+  friskmeldt: 'Friskmeldt (følger med)',
+};
+
+function onInjuryInput() {
+  skaderTekst = (document.getElementById('s-skader') || {}).value || '';
+  rehabStatus = (document.getElementById('s-rehab-status') || {}).value || 'ingen';
+}
+
+function getInjuryContext() {
+  const hasActive = skaderTekst.trim() || (rehabStatus && rehabStatus !== 'ingen');
+  if (!hasActive) return '';
+  const statusLabel = REHAB_LABELS[rehabStatus] || rehabStatus;
+  return `⚠️ Skader/svakheter: ${skaderTekst.trim() || 'se status'}. Status: ${statusLabel}.`;
+}
+
+async function saveInjurySettings() {
+  const url = getWorkerUrl(); if (!url) return;
+  const statusEl = document.getElementById('injury-save-status');
+  statusEl.textContent = 'Lagrer…';
+  try {
+    const r = await fetch(url + '/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skader: skaderTekst, rehabStatus }),
+    });
+    if (r.ok) {
+      statusEl.textContent = '✓ Lagret';
+      localStorage.setItem('injury_skader', skaderTekst);
+      localStorage.setItem('injury_rehab', rehabStatus);
+    } else { statusEl.textContent = '✗ Feil'; }
+  } catch (e) { statusEl.textContent = '✗ ' + e.message; }
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -1191,7 +1269,8 @@ async function analyseOkt(){
   const _kontekst=typeof treningskontekst!=='undefined'?treningskontekst:'';
   const _prinsipper=localStorage.getItem('fase_prinsipper')||'';
   const _sportsCtx=getSportsContext();
-  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.\nHR-soner: ${_zoneStr}.${_sportsCtx?'\n'+_sportsCtx:''}${_kontekst?'\n\nUtøverprofil:\n'+_kontekst:''}${_prinsipper?'\n\nFase-prinsipper:\n'+_prinsipper:''}\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
+  const _injCtx=getInjuryContext();
+  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.\nHR-soner: ${_zoneStr}.${_injCtx?'\n'+_injCtx:''}${_sportsCtx?'\n'+_sportsCtx:''}${_kontekst?'\n\nUtøverprofil:\n'+_kontekst:''}${_prinsipper?'\n\nFase-prinsipper:\n'+_prinsipper:''}\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
   const section=document.getElementById('dp-analysis-section');
   const box=document.getElementById('dp-analysis-text');
   section.style.display='block';
@@ -1272,8 +1351,9 @@ async function runAnalyse(){
     if(h.energi!=null)parts.push(`energi ${h.energi}/5`);
     return`${h.dato}: ${parts.join(', ')||'—'}`;
   }).join('\n');
+  const _injCtxA=getInjuryContext();
   const context=`Du er treneren til Arnar. Maks HR: ${MAX_HR} bpm. I dag: ${getTodayDate()}.
-${kontekstFull?'Profil: '+kontekstFull:''}
+${_injCtxA?_injCtxA+'\n':''}${kontekstFull?'Profil: '+kontekstFull:''}
 ${prinsipper?'Fase-prinsipper: '+prinsipper:''}
 ${acl!==null?'Akutt:Kronisk belastning: '+acl.toFixed(2):''}
 ${weekKm?'Km denne uka: '+weekKm.toFixed(1)+'km':''}
@@ -1686,8 +1766,9 @@ async function autoLoadTodayBrief(okt){
     .join('\n');
 
   const sportsCtx=getSportsContext();
+  const injCtx=getInjuryContext();
   const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.
-HR-soner: ${_zStr||'ukjent'}.${sportsCtx?'\n'+sportsCtx:''}${_ktx?'\n\nUtøverprofil:\n'+_ktx:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
+HR-soner: ${_zStr||'ukjent'}.${injCtx?'\n'+injCtx:''}${sportsCtx?'\n'+sportsCtx:''}${_ktx?'\n\nUtøverprofil:\n'+_ktx:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
 
 DAGENS PLANLAGTE ØKT
 ${okt.navn} — ${okt.type||'—'}, ${okt.varighet||'?'}min${okt.planlagtPuls?', mål-HR: '+okt.planlagtPuls:''}
@@ -2559,10 +2640,11 @@ async function sendPlanMelding(){
   });
   const testCtx=Object.entries(testByDist).map(([dist,o])=>`${dist}: ${o.pace}${o.faktiskSnittHR?' (HR '+o.faktiskSnittHR+')':''} — ${o.dato}`).join('\n');
 
+  const _injCtxPlan=getInjuryContext();
   const systemCtx=`Du er personlig trener til Arnar. Maks HR: ${MAX_HR} bpm.
 Soner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.
 I dag: ${today}. Fase: ${faseNavn}.
-${kontekstFull?`TRENINGSKONTEKST:\n${kontekstFull}\n`:''}
+${_injCtxPlan?_injCtxPlan+'\n':''}${kontekstFull?`TRENINGSKONTEKST:\n${kontekstFull}\n`:''}
 ${prinsipper?`Fase-prinsipper:\n${prinsipper}\n`:''}
 KOMMENDE LØP:
 ${goalsCtx||'Ingen registrerte mål'}

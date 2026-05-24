@@ -132,7 +132,9 @@ export default {
       // POST /api/settings
       if (path === '/api/settings' && request.method === 'POST') {
         const body = await request.json();
-        await env.SETTINGS.put('sports_settings', JSON.stringify(body));
+        const existing = await env.SETTINGS.get('sports_settings');
+        const current = existing ? JSON.parse(existing) : {};
+        await env.SETTINGS.put('sports_settings', JSON.stringify({ ...current, ...body }));
         return json({ ok: true });
       }
 

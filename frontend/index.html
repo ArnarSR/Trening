@@ -168,22 +168,25 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 .pb-ai{background:var(--bg3);color:var(--text);border-color:var(--border-hi);border-radius:14px 14px 14px 4px;}
 .plan-empty{text-align:center;padding:30px 16px;color:var(--text3);font-size:12px;line-height:1.7;}
 /* ── Training calendar ─────────────────────────────────────────────── */
-.plan-cal{padding:12px 14px;}
-.plan-cal-week{margin-bottom:14px;}
-.plan-cal-week-hdr{font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border);}
-.plan-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
-.cal-day{background:var(--bg3);border-radius:6px;padding:5px 3px 6px;min-height:76px;display:flex;flex-direction:column;align-items:center;position:relative;}
-.cal-day.is-today{background:rgba(200,240,96,0.08);outline:1px solid var(--accent);}
+.plan-cal{padding:4px 0;}
+.plan-cal-week{margin-bottom:6px;}
+.plan-cal-week-hdr{font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:8px 14px 5px;border-top:0.5px solid var(--border);}
+.plan-cal-week:first-child .plan-cal-week-hdr{border-top:none;}
+.cal-day{display:flex;align-items:center;gap:12px;padding:7px 14px;border-bottom:0.5px solid var(--border);}
+.cal-day:last-child{border-bottom:none;}
+.cal-day.is-today{background:rgba(200,240,96,0.06);}
 .cal-day.is-past{opacity:.45;}
-.cal-day-name{font-size:8px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;line-height:1;}
-.cal-day-num{font-size:14px;font-weight:700;color:var(--text1);line-height:1.3;margin-bottom:4px;}
+.cal-day-label{display:flex;flex-direction:column;align-items:center;width:34px;flex-shrink:0;}
+.cal-day-name{font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;line-height:1;}
+.cal-day-num{font-size:17px;font-weight:700;color:var(--text1);line-height:1.15;}
 .cal-day.is-today .cal-day-num{color:var(--accent);}
-.cal-session{width:100%;border-radius:4px;padding:3px 2px;margin-top:2px;text-align:center;cursor:pointer;}
-.cal-session-icon{font-size:12px;display:block;line-height:1.2;}
-.cal-session-name{font-size:7px;display:block;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;padding:0 1px;line-height:1.3;}
-.cal-session-dur{font-size:7px;display:block;color:var(--text3);font-family:var(--mono);}
-.cal-session.done-session{opacity:.6;}
-.cal-rest{font-size:8px;color:var(--text3);margin-top:6px;font-style:italic;}
+.cal-session{flex:1;display:flex;align-items:center;gap:9px;background:rgba(200,240,96,0.08);border-radius:8px;padding:8px 10px;cursor:pointer;min-width:0;}
+.cal-session.done-session{background:rgba(255,255,255,0.04);}
+.cal-session-icon{font-size:18px;flex-shrink:0;line-height:1;}
+.cal-session-body{flex:1;min-width:0;}
+.cal-session-name{font-size:13px;font-weight:500;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cal-session-meta{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:1px;}
+.cal-rest{flex:1;font-size:12px;color:var(--text3);padding:2px 0;}
 /* ── /Training calendar ─────────────────────────────────────────────── */
 .plan-preview{background:var(--bg2);border:0.5px solid rgba(200,240,96,0.25);border-radius:var(--rlg);padding:14px 16px;margin-top:10px;}
 .plan-preview-title{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}
@@ -2861,34 +2864,42 @@ function renderCurrentPlan(){
     const week=allDays.slice(w,w+7);
     const wStart=new Date(week[0]+'T12:00:00');
     const wEnd=new Date(week[6]+'T12:00:00');
-    const wLabel=`${wStart.getDate()}. ${MONTH_SHORT[wStart.getMonth()]} – ${wEnd.getDate()}. ${MONTH_SHORT[wEnd.getMonth()]}`;
-    calHtml+=`<div class="plan-cal-week"><div class="plan-cal-week-hdr">${wLabel}</div><div class="plan-cal-grid">`;
+    const wLabel=`Uke — ${wStart.getDate()}. ${MONTH_SHORT[wStart.getMonth()]} – ${wEnd.getDate()}. ${MONTH_SHORT[wEnd.getMonth()]}`;
+    calHtml+=`<div class="plan-cal-week"><div class="plan-cal-week-hdr">${wLabel}</div>`;
     week.forEach((date,i)=>{
       const sessions=calSessions[date]||[];
       const isToday=date===today;
       const isPast=date<today;
       const dayNum=new Date(date+'T12:00:00').getDate();
       calHtml+=`<div class="cal-day${isToday?' is-today':''}${isPast?' is-past':''}">
-        <span class="cal-day-name">${DAY_NAMES[i]}</span>
-        <span class="cal-day-num">${dayNum}</span>`;
+        <div class="cal-day-label">
+          <span class="cal-day-name">${DAY_NAMES[i]}</span>
+          <span class="cal-day-num">${dayNum}</span>
+        </div>`;
       if(sessions.length){
-        sessions.forEach(o=>{
-          const sport=o.sport?o.sport.split(' ')[0]:(o.type==='Race'?'🏁':o.type==='Styrke'?'💪':'🏃');
-          const shortName=o.navn.length>12?o.navn.slice(0,11)+'…':o.navn;
+        const sessionsHtml=sessions.map(o=>{
+          const icon=o.sport?o.sport.split(' ')[0]:(o.type==='Race'?'🏁':o.type==='Styrke'?'💪':o.type==='Rehab'?'🦵':'🏃');
           const isDone=o.status==='Gjennomført';
-          const bg=isDone?'rgba(255,255,255,0.04)':'rgba(200,240,96,0.10)';
-          calHtml+=`<div class="cal-session${isDone?' done-session':''}" style="background:${bg};" onclick="openDetail(${JSON.stringify({id:o.id,navn:o.navn,dato:o.dato,type:o.type,sport:o.sport,varighet:o.varighet,planlagtPuls:o.planlagtPuls,faktiskSnittHR:o.faktiskSnittHR,status:o.status})},this)" title="${esc(o.navn)}">
-            <span class="cal-session-icon">${sport}</span>
-            <span class="cal-session-name">${esc(shortName)}</span>
-            ${o.varighet?`<span class="cal-session-dur">${o.varighet}'</span>`:''}
+          const meta=[o.varighet?o.varighet+' min':'',o.planlagtPuls?'HR '+o.planlagtPuls:'',isDone&&o.faktiskSnittHR?'HR '+o.faktiskSnittHR:''].filter(Boolean).join(' · ');
+          const safeO=JSON.stringify({id:o.id,navn:o.navn,dato:o.dato,type:o.type,sport:o.sport,varighet:o.varighet,planlagtPuls:o.planlagtPuls,faktiskSnittHR:o.faktiskSnittHR,faktiskMaksHR:o.faktiskMaksHR,status:o.status,vurdering:o.vurdering,pace:o.pace});
+          return `<div class="cal-session${isDone?' done-session':''}" onclick='openDetail(${safeO},this)'>
+            <span class="cal-session-icon">${icon}</span>
+            <div class="cal-session-body">
+              <div class="cal-session-name">${esc(o.navn)}</div>
+              ${meta?`<div class="cal-session-meta">${esc(meta)}</div>`:''}
+            </div>
           </div>`;
-        });
+        }).join('');
+        // If multiple sessions, stack them
+        calHtml+=sessions.length>1
+          ?`<div style="flex:1;display:flex;flex-direction:column;gap:5px;">${sessionsHtml}</div>`
+          :sessionsHtml;
       } else {
-        calHtml+=`<span class="cal-rest">${isPast?'—':'Hvile'}</span>`;
+        calHtml+=`<div class="cal-rest">${isPast?'—':'Hviledag'}</div>`;
       }
       calHtml+='</div>';
     });
-    calHtml+='</div></div>';
+    calHtml+='</div>';
   }
   calHtml+='</div>';
   html+=calHtml;

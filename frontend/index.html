@@ -134,6 +134,13 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:var(--sans);font
 .sport-chip.active{border-color:var(--accent2);color:var(--accent2);background:rgba(139,255,200,0.07);}
 .sport-chip.focus{border-color:var(--accent);color:var(--text);background:rgba(200,240,96,0.13);font-weight:600;}
 .sport-chip:active{opacity:.7;}
+.eq-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.eq-label{display:flex;align-items:center;gap:8px;cursor:pointer;padding:5px 0;}
+.eq-label input[type=checkbox]{appearance:none;-webkit-appearance:none;width:15px;height:15px;border:0.5px solid var(--border-hi);border-radius:3px;background:var(--bg3);cursor:pointer;flex-shrink:0;transition:background .12s,border-color .12s;position:relative;}
+.eq-label input[type=checkbox]:checked{background:var(--accent2);border-color:var(--accent2);}
+.eq-label input[type=checkbox]:checked::after{content:'✓';position:absolute;top:-1px;left:2px;font-size:10px;color:var(--bg1);font-weight:700;}
+.eq-label span{font-size:12px;color:var(--text2);}
+.eq-label input:checked+span{color:var(--text);}
 .lap-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px;}
 .lap-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;min-width:380px;}
 .lap-table th{text-align:left;color:var(--text3);padding:4px 10px 7px 0;border-bottom:0.5px solid var(--border);}
@@ -692,6 +699,25 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     </div>
   </div>
   <div class="settings-section">
+    <div class="settings-title">Styrketrening &amp; fasiliteter</div>
+    <div class="settings-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Velg hvilke fasiliteter du har tilgang til. Coachen foreslår aldri utstyr du ikke har.</div>
+      <div id="facility-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
+      <div id="equipment-section" style="display:none;border-top:0.5px solid var(--border);padding-top:14px;margin-bottom:2px;">
+        <div style="font-size:10px;font-weight:500;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;font-family:var(--mono);margin-bottom:10px;">Hjemmegym-utstyr</div>
+        <div id="equipment-list" class="eq-grid" style="margin-bottom:12px;"></div>
+        <div class="form-field">
+          <label class="form-label">Annet utstyr</label>
+          <input type="text" class="setting-input" id="s-annet-utstyr" placeholder="f.eks. parallellbarer, gymnastikkringer…" oninput="onFacilityInput()">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+        <button class="btn btn-sm btn-accent" onclick="saveFacilitySettings()">Lagre</button>
+        <span id="facility-save-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
     <div class="settings-title">Pulssoner</div>
     <div class="settings-card">
       <div id="zones-display" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;font-family:var(--mono);"></div>
@@ -849,6 +875,13 @@ async function loadSportsSettings() {
   if (lsActive) { try { activeSports = new Set(JSON.parse(lsActive)); } catch(_){} }
   if (lsFocus)  focusSport = lsFocus || null;
   _applyInjuryData(localStorage.getItem('injury_skader'), localStorage.getItem('injury_rehab'));
+  try {
+    _applyFacilityData({
+      fasiliteter: JSON.parse(localStorage.getItem('fac_fasiliteter') || '[]'),
+      utstyr:      JSON.parse(localStorage.getItem('fac_utstyr') || '[]'),
+      annetUtstyr: localStorage.getItem('fac_annet') || '',
+    });
+  } catch (_) {}
   renderSportsGrid();
 
   const url = getWorkerUrl(); if (!url) return;
@@ -863,6 +896,10 @@ async function loadSportsSettings() {
     _applyInjuryData(d.skader, d.rehabStatus);
     localStorage.setItem('injury_skader', skaderTekst);
     localStorage.setItem('injury_rehab', rehabStatus);
+    _applyFacilityData(d);
+    localStorage.setItem('fac_fasiliteter', JSON.stringify([...activeFacilities]));
+    localStorage.setItem('fac_utstyr', JSON.stringify([...activeEquipment]));
+    localStorage.setItem('fac_annet', annetUtstyr);
     renderSportsGrid();
   } catch (_) {}
 }
@@ -872,6 +909,107 @@ function getSportsContext() {
   const fl = ALL_SPORTS.find(s => s.key === focusSport);
   const activeLabels = ALL_SPORTS.filter(s => activeSports.has(s.key)).map(s => s.label).join(', ');
   return `Aktive treningsformer: ${activeLabels}.${fl ? ' Fokussport (primær): ' + fl.label + '.' : ''}`;
+}
+
+// ── Facility / equipment settings ────────────────────────────────────────────
+const ALL_FACILITIES = [
+  { key: 'treningssenter', label: '🏋️ Treningssenter' },
+  { key: 'hjemmegym',      label: '🏠 Hjemmegym' },
+  { key: 'utendors',       label: '🌳 Tuftepark / utendørs' },
+  { key: 'kroppsvekt',     label: '💪 Kroppsvekt' },
+];
+
+const ALL_EQUIPMENT = [
+  { key: 'manualer',    label: 'Manualer / håndvekter' },
+  { key: 'kettlebell',  label: 'Kettlebell' },
+  { key: 'barbell',     label: 'Vektskive + stang (barbell)' },
+  { key: 'bench',       label: 'Treningsbench' },
+  { key: 'pullup',      label: 'Pull-up-stang' },
+  { key: 'trx',         label: 'TRX / rings' },
+  { key: 'strikker',    label: 'Strikker / resistance bands' },
+  { key: 'lopeband',    label: 'Løpeband' },
+  { key: 'ergometer',   label: 'Roing / ergometer' },
+  { key: 'kabelmaskin', label: 'Kabelmaskin' },
+];
+
+let activeFacilities = new Set();
+let activeEquipment  = new Set();
+let annetUtstyr = '';
+
+function renderFacilityGrid() {
+  const grid = document.getElementById('facility-grid');
+  if (!grid) return;
+  grid.innerHTML = ALL_FACILITIES.map(f => {
+    const on = activeFacilities.has(f.key);
+    return `<button class="sport-chip${on?' active':''}" onclick="toggleFacility('${f.key}')">${f.label}</button>`;
+  }).join('');
+  const eqSec = document.getElementById('equipment-section');
+  if (eqSec) eqSec.style.display = activeFacilities.has('hjemmegym') ? 'block' : 'none';
+}
+
+function renderEquipmentList() {
+  const list = document.getElementById('equipment-list');
+  if (!list) return;
+  list.innerHTML = ALL_EQUIPMENT.map(e => {
+    const chk = activeEquipment.has(e.key) ? ' checked' : '';
+    return `<label class="eq-label"><input type="checkbox" value="${e.key}"${chk} onchange="onEquipmentChange(this)"><span>${e.label}</span></label>`;
+  }).join('');
+}
+
+function toggleFacility(key) {
+  if (activeFacilities.has(key)) activeFacilities.delete(key);
+  else activeFacilities.add(key);
+  renderFacilityGrid();
+}
+
+function onEquipmentChange(el) {
+  if (el.checked) activeEquipment.add(el.value);
+  else activeEquipment.delete(el.value);
+}
+
+function onFacilityInput() {
+  annetUtstyr = (document.getElementById('s-annet-utstyr') || {}).value || '';
+}
+
+function getFacilityContext() {
+  if (!activeFacilities.size) return '';
+  const facLabels = ALL_FACILITIES.filter(f => activeFacilities.has(f.key)).map(f => f.label).join(', ');
+  const parts = [`🏋️ Tilgjengelige fasiliteter: ${facLabels}.`];
+  if (activeFacilities.has('hjemmegym') && activeEquipment.size) {
+    const eqLabels = ALL_EQUIPMENT.filter(e => activeEquipment.has(e.key)).map(e => e.label).join(', ');
+    parts.push(`Hjemmegym-utstyr: ${eqLabels}.`);
+  }
+  if (annetUtstyr.trim()) parts.push(`Annet: ${annetUtstyr.trim()}.`);
+  return parts.join(' ');
+}
+
+function _applyFacilityData(d) {
+  if (d.fasiliteter) activeFacilities = new Set(d.fasiliteter);
+  if (d.utstyr)      activeEquipment  = new Set(d.utstyr);
+  annetUtstyr = d.annetUtstyr || '';
+  const aEl = document.getElementById('s-annet-utstyr');
+  if (aEl) aEl.value = annetUtstyr;
+  renderFacilityGrid();
+  renderEquipmentList();
+}
+
+async function saveFacilitySettings() {
+  const url = getWorkerUrl(); if (!url) return;
+  const statusEl = document.getElementById('facility-save-status');
+  statusEl.textContent = 'Lagrer…';
+  try {
+    const r = await fetch(url + '/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fasiliteter: [...activeFacilities], utstyr: [...activeEquipment], annetUtstyr }),
+    });
+    if (r.ok) {
+      statusEl.textContent = '✓ Lagret';
+      localStorage.setItem('fac_fasiliteter', JSON.stringify([...activeFacilities]));
+      localStorage.setItem('fac_utstyr', JSON.stringify([...activeEquipment]));
+      localStorage.setItem('fac_annet', annetUtstyr);
+    } else { statusEl.textContent = '✗ Feil'; }
+  } catch (e) { statusEl.textContent = '✗ ' + e.message; }
 }
 
 // ── Injury / rehab settings ───────────────────────────────────────────────────
@@ -1270,7 +1408,8 @@ async function analyseOkt(){
   const _prinsipper=localStorage.getItem('fase_prinsipper')||'';
   const _sportsCtx=getSportsContext();
   const _injCtx=getInjuryContext();
-  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.\nHR-soner: ${_zoneStr}.${_injCtx?'\n'+_injCtx:''}${_sportsCtx?'\n'+_sportsCtx:''}${_kontekst?'\n\nUtøverprofil:\n'+_kontekst:''}${_prinsipper?'\n\nFase-prinsipper:\n'+_prinsipper:''}\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
+  const _facCtx=getFacilityContext();
+  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.\nHR-soner: ${_zoneStr}.${_injCtx?'\n'+_injCtx:''}${_facCtx?'\n'+_facCtx:''}${_sportsCtx?'\n'+_sportsCtx:''}${_kontekst?'\n\nUtøverprofil:\n'+_kontekst:''}${_prinsipper?'\n\nFase-prinsipper:\n'+_prinsipper:''}\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
   const section=document.getElementById('dp-analysis-section');
   const box=document.getElementById('dp-analysis-text');
   section.style.display='block';
@@ -1352,8 +1491,9 @@ async function runAnalyse(){
     return`${h.dato}: ${parts.join(', ')||'—'}`;
   }).join('\n');
   const _injCtxA=getInjuryContext();
+  const _facCtxA=getFacilityContext();
   const context=`Du er treneren til Arnar. Maks HR: ${MAX_HR} bpm. I dag: ${getTodayDate()}.
-${_injCtxA?_injCtxA+'\n':''}${kontekstFull?'Profil: '+kontekstFull:''}
+${_injCtxA?_injCtxA+'\n':''}${_facCtxA?_facCtxA+'\n':''}${kontekstFull?'Profil: '+kontekstFull:''}
 ${prinsipper?'Fase-prinsipper: '+prinsipper:''}
 ${acl!==null?'Akutt:Kronisk belastning: '+acl.toFixed(2):''}
 ${weekKm?'Km denne uka: '+weekKm.toFixed(1)+'km':''}
@@ -1767,8 +1907,9 @@ async function autoLoadTodayBrief(okt){
 
   const sportsCtx=getSportsContext();
   const injCtx=getInjuryContext();
+  const facCtx=getFacilityContext();
   const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.
-HR-soner: ${_zStr||'ukjent'}.${injCtx?'\n'+injCtx:''}${sportsCtx?'\n'+sportsCtx:''}${_ktx?'\n\nUtøverprofil:\n'+_ktx:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
+HR-soner: ${_zStr||'ukjent'}.${injCtx?'\n'+injCtx:''}${facCtx?'\n'+facCtx:''}${sportsCtx?'\n'+sportsCtx:''}${_ktx?'\n\nUtøverprofil:\n'+_ktx:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
 
 DAGENS PLANLAGTE ØKT
 ${okt.navn} — ${okt.type||'—'}, ${okt.varighet||'?'}min${okt.planlagtPuls?', mål-HR: '+okt.planlagtPuls:''}
@@ -2641,10 +2782,11 @@ async function sendPlanMelding(){
   const testCtx=Object.entries(testByDist).map(([dist,o])=>`${dist}: ${o.pace}${o.faktiskSnittHR?' (HR '+o.faktiskSnittHR+')':''} — ${o.dato}`).join('\n');
 
   const _injCtxPlan=getInjuryContext();
+  const _facCtxPlan=getFacilityContext();
   const systemCtx=`Du er personlig trener til Arnar. Maks HR: ${MAX_HR} bpm.
 Soner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.
 I dag: ${today}. Fase: ${faseNavn}.
-${_injCtxPlan?_injCtxPlan+'\n':''}${kontekstFull?`TRENINGSKONTEKST:\n${kontekstFull}\n`:''}
+${_injCtxPlan?_injCtxPlan+'\n':''}${_facCtxPlan?_facCtxPlan+'\n':''}${kontekstFull?`TRENINGSKONTEKST:\n${kontekstFull}\n`:''}
 ${prinsipper?`Fase-prinsipper:\n${prinsipper}\n`:''}
 KOMMENDE LØP:
 ${goalsCtx||'Ingen registrerte mål'}

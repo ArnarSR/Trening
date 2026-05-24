@@ -167,6 +167,24 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 .pb-user{background:var(--accent);color:#0f0f0f;border-color:var(--accent);border-radius:14px 14px 4px 14px;font-weight:500;}
 .pb-ai{background:var(--bg3);color:var(--text);border-color:var(--border-hi);border-radius:14px 14px 14px 4px;}
 .plan-empty{text-align:center;padding:30px 16px;color:var(--text3);font-size:12px;line-height:1.7;}
+/* ── Training calendar ─────────────────────────────────────────────── */
+.plan-cal{padding:12px 14px;}
+.plan-cal-week{margin-bottom:14px;}
+.plan-cal-week-hdr{font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border);}
+.plan-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-day{background:var(--bg3);border-radius:6px;padding:5px 3px 6px;min-height:76px;display:flex;flex-direction:column;align-items:center;position:relative;}
+.cal-day.is-today{background:rgba(200,240,96,0.08);outline:1px solid var(--accent);}
+.cal-day.is-past{opacity:.45;}
+.cal-day-name{font-size:8px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;line-height:1;}
+.cal-day-num{font-size:14px;font-weight:700;color:var(--text1);line-height:1.3;margin-bottom:4px;}
+.cal-day.is-today .cal-day-num{color:var(--accent);}
+.cal-session{width:100%;border-radius:4px;padding:3px 2px;margin-top:2px;text-align:center;cursor:pointer;}
+.cal-session-icon{font-size:12px;display:block;line-height:1.2;}
+.cal-session-name{font-size:7px;display:block;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;padding:0 1px;line-height:1.3;}
+.cal-session-dur{font-size:7px;display:block;color:var(--text3);font-family:var(--mono);}
+.cal-session.done-session{opacity:.6;}
+.cal-rest{font-size:8px;color:var(--text3);margin-top:6px;font-style:italic;}
+/* ── /Training calendar ─────────────────────────────────────────────── */
 .plan-preview{background:var(--bg2);border:0.5px solid rgba(200,240,96,0.25);border-radius:var(--rlg);padding:14px 16px;margin-top:10px;}
 .plan-preview-title{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}
 .plan-preview-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px;}
@@ -2809,24 +2827,71 @@ function renderCurrentPlan(){
     </div>`;
   }
 
-  // Planned sessions
-  if(planned.length){
-    html += planned.map(o=>{
-      const typeClass = TYPE_MAP[o.type]||'type-s2';
-      const sport = o.sport ? o.sport.split(' ')[0] : '';
-      const meta = [o.varighet?o.varighet+'min':'', o.planlagtPuls?'HR '+o.planlagtPuls:''].filter(Boolean).join(' · ');
-      return `<div class="okt-row" style="cursor:default;">
-        <span class="okt-type ${typeClass}">${sport||o.type?.slice(0,4)||'ØKT'}</span>
-        <div class="okt-center">
-          <div class="okt-name">${esc(o.navn)}</div>
-          <div class="okt-date">${formatDato(o.dato)}${meta?' · '+esc(meta):''}</div>
-        </div>
-        <div class="okt-right"><div class="okt-status status-todo">·</div></div>
-      </div>`;
-    }).join('');
-  } else {
-    html += `<div style="padding:12px 14px;font-size:12px;color:var(--text3);">Ingen planlagte økter de neste 3 ukene</div>`;
+  // ── Calendar grid ─────────────────────────────────────────────────────────
+  // Include completed sessions from this week (past days) + all planned
+  const calStart = new Date(today+'T12:00:00');
+  const startDow = calStart.getDay()===0?6:calStart.getDay()-1;
+  calStart.setDate(calStart.getDate()-startDow); // rewind to Monday of current week
+
+  const calEnd = new Date(cutoffStr+'T12:00:00');
+  const endDow = calEnd.getDay()===0?6:calEnd.getDay()-1;
+  calEnd.setDate(calEnd.getDate()+(6-endDow)); // extend to Sunday
+
+  // Collect all relevant sessions keyed by date
+  const calSessions = {};
+  const addToCalendar = (o) => {
+    if(!calSessions[o.dato]) calSessions[o.dato]=[];
+    calSessions[o.dato].push(o);
+  };
+  // Completed sessions this week (show as done)
+  allOkter.filter(o=>o.status==='Gjennomført'&&o.dato>=calStart.toISOString().split('T')[0]&&o.dato<=today&&o.type!=='Dagbok'&&o.type!=='Mål').forEach(addToCalendar);
+  // Planned sessions forward
+  planned.forEach(addToCalendar);
+
+  // Build day list Monday→Sunday for each week
+  const DAY_NAMES=['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
+  const MONTH_SHORT=['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
+  const allDays=[];
+  const d=new Date(calStart);
+  while(d<=calEnd){allDays.push(d.toISOString().split('T')[0]);d.setDate(d.getDate()+1);}
+
+  // Group into weeks of 7
+  let calHtml='<div class="plan-cal">';
+  for(let w=0;w<allDays.length;w+=7){
+    const week=allDays.slice(w,w+7);
+    const wStart=new Date(week[0]+'T12:00:00');
+    const wEnd=new Date(week[6]+'T12:00:00');
+    const wLabel=`${wStart.getDate()}. ${MONTH_SHORT[wStart.getMonth()]} – ${wEnd.getDate()}. ${MONTH_SHORT[wEnd.getMonth()]}`;
+    calHtml+=`<div class="plan-cal-week"><div class="plan-cal-week-hdr">${wLabel}</div><div class="plan-cal-grid">`;
+    week.forEach((date,i)=>{
+      const sessions=calSessions[date]||[];
+      const isToday=date===today;
+      const isPast=date<today;
+      const dayNum=new Date(date+'T12:00:00').getDate();
+      calHtml+=`<div class="cal-day${isToday?' is-today':''}${isPast?' is-past':''}">
+        <span class="cal-day-name">${DAY_NAMES[i]}</span>
+        <span class="cal-day-num">${dayNum}</span>`;
+      if(sessions.length){
+        sessions.forEach(o=>{
+          const sport=o.sport?o.sport.split(' ')[0]:(o.type==='Race'?'🏁':o.type==='Styrke'?'💪':'🏃');
+          const shortName=o.navn.length>12?o.navn.slice(0,11)+'…':o.navn;
+          const isDone=o.status==='Gjennomført';
+          const bg=isDone?'rgba(255,255,255,0.04)':'rgba(200,240,96,0.10)';
+          calHtml+=`<div class="cal-session${isDone?' done-session':''}" style="background:${bg};" onclick="openDetail(${JSON.stringify({id:o.id,navn:o.navn,dato:o.dato,type:o.type,sport:o.sport,varighet:o.varighet,planlagtPuls:o.planlagtPuls,faktiskSnittHR:o.faktiskSnittHR,status:o.status})},this)" title="${esc(o.navn)}">
+            <span class="cal-session-icon">${sport}</span>
+            <span class="cal-session-name">${esc(shortName)}</span>
+            ${o.varighet?`<span class="cal-session-dur">${o.varighet}'</span>`:''}
+          </div>`;
+        });
+      } else {
+        calHtml+=`<span class="cal-rest">${isPast?'—':'Hvile'}</span>`;
+      }
+      calHtml+='</div>';
+    });
+    calHtml+='</div></div>';
   }
+  calHtml+='</div>';
+  html+=calHtml;
 
   sessionsEl.innerHTML = html;
   sessionsEl.style.display = 'block';

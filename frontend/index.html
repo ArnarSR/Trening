@@ -188,6 +188,9 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 .add-goal-form{background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:var(--rlg);padding:16px;margin-bottom:14px;}
 .nc-val{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--accent);line-height:1.1;}
 .nc-notat{font-size:11px;color:var(--text3);font-style:italic;margin-top:8px;padding:0 2px;}
+#nc-kcal-bar{display:none;font-size:12px;color:var(--text2);margin-bottom:8px;padding:7px 11px;background:var(--bg2);border-radius:var(--r);border:0.5px solid var(--border);line-height:1.5;}
+#nc-kcal-bar strong{color:var(--accent);font-family:var(--mono);}
+#nc-kcal-detail{color:var(--text3);font-size:11px;}
 .hand-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:1000;display:none;align-items:center;justify-content:center;}
 .hand-modal-backdrop.open{display:flex;}
 .hand-modal{background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:var(--rlg);padding:24px;max-width:340px;width:90%;}
@@ -341,33 +344,38 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 
   <!-- Ernæring i dag -->
   <div id="idag-nutrition-section" style="margin:16px 0 10px;">
-    <div class="sec-head" style="margin-bottom:8px;">
-      <div class="sec-title">🍽️ Ernæring i dag</div>
+    <div class="sec-head" style="margin-bottom:6px;">
+      <div class="sec-title">🍽️ Energibudsjett i dag</div>
       <button class="btn btn-sm" onclick="showHandSystemModal()" style="font-size:11px;padding:3px 10px;">?</button>
+    </div>
+    <div id="nc-kcal-bar">
+      <span id="nc-day-label" style="font-weight:600;color:var(--text1);">—</span>
+      · mål: <strong id="nc-target-kcal">—</strong> kcal
+      <span id="nc-kcal-detail"></span>
     </div>
     <div class="stat-grid">
       <div class="stat-card">
         <div class="stat-label">✋ Protein</div>
-        <div class="nc-val" id="nc-protein-val">2</div>
-        <div class="stat-sub">palmer</div>
+        <div class="nc-val" id="nc-protein-val">—</div>
+        <div class="stat-sub" id="nc-protein-sub">gram</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">🤜 Karbo</div>
-        <div class="nc-val" id="nc-karbo-val">2</div>
-        <div class="stat-sub">never</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">👊 Grønt</div>
-        <div class="nc-val" id="nc-gront-val">2</div>
-        <div class="stat-sub">knyttnever</div>
+        <div class="nc-val" id="nc-karbo-val">—</div>
+        <div class="stat-sub" id="nc-karbo-sub">gram</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">👍 Fett</div>
-        <div class="nc-val" id="nc-fett-val">2</div>
-        <div class="stat-sub">tomler</div>
+        <div class="nc-val" id="nc-fett-val">—</div>
+        <div class="stat-sub" id="nc-fett-sub">gram</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">👊 Grønt</div>
+        <div class="nc-val" id="nc-gront-val">4–6</div>
+        <div class="stat-sub">never (alltid)</div>
       </div>
     </div>
-    <div class="nc-notat" id="nc-notat">Juster etter dagens økt</div>
+    <div class="nc-notat" id="nc-notat">Beregner…</div>
   </div>
 
   <!-- Dagbok / logg -->
@@ -1102,7 +1110,7 @@ function buildCoachContext() {
   if (sportsCtx) lines.push(sportsCtx);
   if (ktx) lines.push(`\nUtøverprofil:\n${ktx}`);
   if (prinsipper) lines.push(`\nFase-prinsipper:\n${prinsipper}`);
-  lines.push('\nHåndsystemet (per måltid, aktiv mann): ✋ palme=protein · 🤜 neve=karbo · 👊 knyttneve=grønt · 👍 tommel=fett.\nBasis: 3P 2K 2G 2T per måltid. Justeringer: hviledag −1K; lett økt S1-2 <45min −0.5K; moderat økt ingen endring; hard/intervall +1K +0.5P; lang økt >90min eller race +2K +1P. Tommelregel kalorier: ~500 kcal forbrente = +1 neve ekstra karbo.');
+  lines.push('\nErnæringsmodell: ytelsesstyrt energibudsjett. Protein fast (1.8g/kg). Fett moderat (0.8–0.9g/kg). Karbo fyller resten av kalorimålet. Håndsystem som huskeregel: ✋ palmer=protein · 🤜 håndfulle=karbo · 👍 tomler=fett · 👊 never=grønt.');
   return lines.join('\n');
 }
 
@@ -1116,14 +1124,72 @@ function buildOktContext(okt, ov = {}) {
 }
 
 // ── Nutrition cards ───────────────────────────────────────────────────────────
-function updateNutritionCards(n) {
-  if (!n || typeof n !== 'object') return;
+// ── Performance nutrition model ───────────────────────────────────────────────
+function classifyDayType(okt) {
+  if (!okt || okt.type === 'Dagbok' || okt.type === 'Mål') return 'rest';
+  const t = okt.type || '';
+  if (t === 'Race' || t === 'Testløp') return 'race';
+  if (t === 'Bakkeintervall' || t === 'Terskel') return 'hard';
+  if (t === 'Styrke') return 'moderate';
+  if (t === 'Rehab') return 'light';
+  if (t === 'Sone 2') return (okt.varighet || 0) >= 75 ? 'moderate' : 'light';
+  return 'moderate';
+}
+
+function calculateDailyTargets(weightKg, baseKcal, activeKcal, dayType) {
+  const factors = { rest: 0.5, light: 0.65, moderate: 0.8, hard: 0.9, race: 1.0 };
+  const factor = factors[dayType] ?? 0.8;
+  const adjustedActivity = Math.round((activeKcal || 0) * factor);
+  const targetKcal = Math.round(baseKcal + adjustedActivity);
+  const proteinG = Math.round(weightKg * 1.8);
+  const fatG = Math.round(weightKg * (['hard', 'race'].includes(dayType) ? 0.8 : 0.9));
+  const remaining = targetKcal - proteinG * 4 - fatG * 9;
+  const carbsG = Math.max(50, Math.round(remaining / 4));
+  return {
+    targetKcal, adjustedActivity, baseKcal, activeKcal: activeKcal || 0, dayType,
+    proteinG, carbsG, fatG,
+    proteinHands: Math.round(proteinG / 28),
+    carbHands:    Math.round(carbsG  / 30),
+    fatThumbs:    Math.round(fatG    / 10),
+  };
+}
+
+function loadNutritionTargets(todayOkt) {
+  const weight   = allHelse.find(h => h.vekt != null)?.vekt || 80;
+  const baseKcal = parseInt(localStorage.getItem('profil_base_kcal') || '2500');
+  const today    = getTodayDate();
+  const activeKcal =
+    allOkter.find(o => o.dato === today && o.status === 'Gjennomført' && o.kalorier)?.kalorier ||
+    todayOkt?.kalorier ||
+    allOkter.find(o => o.status === 'Gjennomført' && o.kalorier && o.dato < today)?.kalorier || 0;
+  return calculateDailyTargets(weight, baseKcal, activeKcal, classifyDayType(todayOkt));
+}
+
+const DAY_LABELS = { rest:'Hviledag', light:'Lett dag', moderate:'Moderat dag', hard:'Hard dag', race:'Race-dag' };
+
+function displayNutritionTargets(targets, notat) {
   const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
-  set('nc-protein-val', n.protein ?? 2);
-  set('nc-karbo-val',   n.karbo   ?? 2);
-  set('nc-gront-val',   n.gront   ?? 2);
-  set('nc-fett-val',    n.fett    ?? 2);
-  if (n.notat) set('nc-notat', n.notat);
+  const bar = document.getElementById('nc-kcal-bar');
+  if (bar) bar.style.display = '';
+  set('nc-day-label',    DAY_LABELS[targets.dayType] || '—');
+  set('nc-target-kcal',  targets.targetKcal.toLocaleString('no-NO'));
+  set('nc-kcal-detail',
+    targets.activeKcal > 0
+      ? ` (basis ${targets.baseKcal} + ${targets.adjustedActivity} aktiv)`
+      : ` (basis ${targets.baseKcal}, ingen aktivitetsdata)`);
+  set('nc-protein-val',  targets.proteinG + 'g');
+  set('nc-protein-sub',  '~' + targets.proteinHands + ' håndflater');
+  set('nc-karbo-val',    targets.carbsG + 'g');
+  set('nc-karbo-sub',    '~' + targets.carbHands + ' håndfulle');
+  set('nc-fett-val',     targets.fatG + 'g');
+  set('nc-fett-sub',     '~' + targets.fatThumbs + ' tomler');
+  set('nc-gront-val',    '4–6');
+  if (notat) set('nc-notat', notat);
+}
+
+// Legacy stub — callers that pass old nutrition object just get notat update
+function updateNutritionCards(n) {
+  if (n?.notat) { const el = document.getElementById('nc-notat'); if (el) el.textContent = n.notat; }
 }
 
 function showHandSystemModal() {
@@ -1962,6 +2028,10 @@ async function autoLoadTodayBrief(okt){
 
   // Cache per session+day — don't re-hit API unless okt or date changes
   const cacheKey=`brief_${okt.id}_${new Date().toISOString().slice(0,10)}`;
+  // Always calculate + show nutrition targets immediately (pure math, no API)
+  const nutritionTargets = loadNutritionTargets(okt);
+  displayNutritionTargets(nutritionTargets);
+
   const cached=sessionStorage.getItem(cacheKey);
   if(cached){
     aiSec.style.display='block';
@@ -1969,7 +2039,7 @@ async function autoLoadTodayBrief(okt){
     try{
       const c=JSON.parse(cached);
       aiBox.textContent=c.brief||cached;
-      updateNutritionCards(c.nutrition);
+      if(c.notat){const el=document.getElementById('nc-notat');if(el)el.textContent=c.notat;}
     }catch(_){aiBox.textContent=cached;}
     aiStatus.textContent='📋 Økt-brief';
     return;
@@ -2037,31 +2107,34 @@ ${recent||'(ingen enda)'}
 ${recentDagbok?'\nDAGBOK\n'+recentDagbok:''}
 ${upcomingGoals?'\nKOMMENDE MÅL/LØYPER\n'+upcomingGoals:''}
 
-Svar med GYLDIG JSON og INGEN ANNEN TEKST i dette formatet:
-{"brief":"coaching-brief på norsk (4–6 setninger). Vurder: 1) Restitusjons-status ut fra søvntrend og belastning — juster anbefalt intensitet. 2) Konkret intensitetsguidance med spesifikke HR-tall fra sonene. 3) Kort ernæringstips.","nutrition":{"protein":3,"karbo":2,"gront":2,"fett":2,"notat":"ett konkret ernæringstips basert på dagens økt og eventuell kaloriforbrenning"}}`;
+BEREGNET ENERGIBUDSJETT I DAG (bruk dette som kontekst, ikke regn det ut på nytt)
+${DAY_LABELS[nutritionTargets.dayType]||'—'} · Mål: ${nutritionTargets.targetKcal} kcal
+Protein: ${nutritionTargets.proteinG}g | Karbo: ${nutritionTargets.carbsG}g | Fett: ${nutritionTargets.fatG}g
+${nutritionTargets.activeKcal>0?`Garmin aktive kcal: ${nutritionTargets.activeKcal} × ${nutritionTargets.adjustedActivity/nutritionTargets.activeKcal|0===0?(nutritionTargets.activeKcal>0?Math.round(nutritionTargets.adjustedActivity/nutritionTargets.activeKcal*100)+'%':'—'):'—'} = ${nutritionTargets.adjustedActivity} kcal justert`:'Ingen aktivitetsdata'}
+
+Svar med GYLDIG JSON og INGEN ANNEN TEKST:
+{"brief":"coaching-brief på norsk (4–6 setninger). Vurder: 1) Restitusjons-status ut fra søvntrend og belastning. 2) Konkret intensitetsguidance med HR-tall fra sonene. 3) Én setning om timing/matkvalitet for dagens energimål.","notat":"ett konkret tips om mattiming eller matkvalitet for ${DAY_LABELS[nutritionTargets.dayType]||'i dag'} (én setning)"}`;
 
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const d=await r.json();
     const raw=d.text||'';
     let briefText=raw;
-    let nutrition=null;
+    let notat=null;
     try{
-      // Strip possible markdown fences
       const stripped=raw.replace(/^```(?:json)?\s*/m,'').replace(/\s*```\s*$/m,'').trim();
       const parsed=JSON.parse(stripped);
       briefText=parsed.brief||raw;
-      nutrition=parsed.nutrition||null;
+      notat=parsed.notat||parsed.nutrition?.notat||null;
     }catch(_){
-      // Try brace extraction
       const s=raw.indexOf('{'),e=raw.lastIndexOf('}');
-      if(s!==-1&&e>s){try{const p=JSON.parse(raw.slice(s,e+1));briefText=p.brief||raw;nutrition=p.nutrition||null;}catch(_){}}
+      if(s!==-1&&e>s){try{const p=JSON.parse(raw.slice(s,e+1));briefText=p.brief||raw;notat=p.notat||p.nutrition?.notat||null;}catch(_){}}
     }
     aiBox.className='analysis-box';
     aiBox.textContent=briefText||'Ingen respons.';
     aiStatus.textContent='📋 Økt-brief';
-    updateNutritionCards(nutrition);
-    sessionStorage.setItem(cacheKey,JSON.stringify({brief:briefText,nutrition}));
+    if(notat){const el=document.getElementById('nc-notat');if(el)el.textContent=notat;}
+    sessionStorage.setItem(cacheKey,JSON.stringify({brief:briefText,notat}));
   }catch(e){aiSec.style.display='none';}
 }
 

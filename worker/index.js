@@ -26,13 +26,14 @@ Håndsystemet for ernæring — bruk dette når du beregner nutrition-feltet:
 • 👊 KNYTTNEVE = grønnsaker
 • 👍 TOMMEL = fett (nøtter, olje, avokado, smør)
 
-Daglige basisporsjoner (menn): 2 palmer protein, 2 never karbo, 2 knyttnever grønt, 2 tomler fett.
+Basisporsjoner per måltid (aktiv mann): 3 palmer protein, 2 never karbo, 2 knyttnever grønt, 2 tomler fett.
 Juster etter treningsbelastning:
-• Hviledag / lett økt (S1): −1 neve karbo
-• Moderat økt (S2–S3, 45–75 min): standardporsjon
-• Hard økt / intervall (S4–S5 eller >75 min): +1 neve karbo, +0.5 palmer protein
-• Styrkeøkt: +1 palm protein, standard karbo
-• Doble treningsdager: +1 neve karbo per ekstraøkt
+• Hviledag: −1 neve karbo
+• Lett økt S1-2 <45 min: −0.5 neve karbo
+• Moderat økt S2-3 45–75 min: standardporsjon
+• Hard økt / intervall S4-5 eller >75 min: +1 neve karbo, +0.5 palmer protein
+• Lang økt >90 min eller race: +2 never karbo, +1 palm protein
+• Tommelregel kalorier: ~500 kcal forbrente (fra Garmin/Strava) = +1 neve karbo
 
 Lengdekrav per felt — overhold disse:
 • summary: maks 2 setninger
@@ -43,7 +44,7 @@ Lengdekrav per felt — overhold disse:
 • nutrition.notat: én setning med kontekstuelt ernæringstips (f.eks. "Spis karboene innen 30 min etter intervalløkten")
 
 Du svarer ALLTID med gyldig JSON og INGEN ANNEN TEKST. Nøyaktig dette formatet:
-{"summary":"...","loadAssessment":"...","recoveryStatus":"...","nextSessionRecommendation":"...","motivation":"...","nutrition":{"protein":2,"karbo":2,"gront":2,"fett":2,"notat":"..."}}\
+{"summary":"...","loadAssessment":"...","recoveryStatus":"...","nextSessionRecommendation":"...","motivation":"...","nutrition":{"protein":3,"karbo":2,"gront":2,"fett":2,"notat":"..."}}\
 `;
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -375,7 +376,7 @@ export default {
             summary: rawText,
             loadAssessment: '—', recoveryStatus: '—',
             nextSessionRecommendation: '—', motivation: '—',
-            nutrition: { protein: 2, karbo: 2, gront: 2, fett: 2, notat: '' },
+            nutrition: { protein: 3, karbo: 2, gront: 2, fett: 2, notat: '' },
           });
         }
 
@@ -485,6 +486,7 @@ async function syncStrava(env) {
     const duration = activity.elapsed_time ? Math.round(activity.elapsed_time / 60) : null;
     const distance = activity.distance ? Math.round(activity.distance / 100) / 10 : null; // km, 1 decimal
     const pace = activity.average_speed > 0 ? formatPace(activity.average_speed) : null;
+    const calories = activity.calories ? Math.round(activity.calories) : null;
     const name = activity.name || 'Strava-økt';
 
     // Match by Strava ID first (exact dedup), fall back to date+sport (catches manually-created sessions)
@@ -508,6 +510,7 @@ async function syncStrava(env) {
       if (distance !== null) props['Distanse (km)']    = { number: distance };
       if (pace)              props['Pace']              = { rich_text: [{ text: { content: pace } }] };
       if (sport)             props['Sport']             = { select: { name: sport.type } };
+      if (calories !== null) props['Kalorier']          = { number: calories };
       props['Strava ID'] = { rich_text: [{ text: { content: stravaId } }] };
 
       const patchBody = { properties: props };
@@ -536,6 +539,7 @@ async function syncStrava(env) {
       if (distance !== null) props['Distanse (km)']    = { number: distance };
       if (pace)              props['Pace']              = { rich_text: [{ text: { content: pace } }] };
       if (sport)             props['Sport']             = { select: { name: sport.type } };
+      if (calories !== null) props['Kalorier']          = { number: calories };
 
       const createBody = { parent: { database_id: env.DB_ID }, properties: props };
       if (sport) createBody.icon = { type: 'emoji', emoji: sport.icon };
@@ -863,6 +867,7 @@ function mapPage(page) {
     medVogn: p['Med vogn']?.checkbox || false,
     vurdering: p['Vurdering']?.rich_text?.[0]?.plain_text || '',
     stravaId: p['Strava ID']?.rich_text?.[0]?.plain_text || '',
+    kalorier: p['Kalorier']?.number || null,
     url: page.url,
   };
 }
@@ -906,6 +911,8 @@ function buildNotionProps(body) {
     props['Med vogn'] = { checkbox: body.medVogn };
   if (body.stravaId !== undefined)
     props['Strava ID'] = { rich_text: [{ text: { content: String(body.stravaId) } }] };
+  if (body.kalorier != null)
+    props['Kalorier'] = { number: body.kalorier };
   return props;
 }
 
@@ -1038,7 +1045,7 @@ function buildStructuredMessage(okt, sovn, hrv, historikk) {
  */
 function parseStructuredResponse(text) {
   const REQUIRED = ['summary', 'loadAssessment', 'recoveryStatus', 'nextSessionRecommendation', 'motivation'];
-  const DEFAULT_NUTRITION = { protein: 2, karbo: 2, gront: 2, fett: 2, notat: '' };
+  const DEFAULT_NUTRITION = { protein: 3, karbo: 2, gront: 2, fett: 2, notat: '' };
 
   const finalize = (parsed) => {
     REQUIRED.forEach(k => { if (!parsed[k]) parsed[k] = '—'; });

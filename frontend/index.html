@@ -1102,7 +1102,7 @@ function buildCoachContext() {
   if (sportsCtx) lines.push(sportsCtx);
   if (ktx) lines.push(`\nUtøverprofil:\n${ktx}`);
   if (prinsipper) lines.push(`\nFase-prinsipper:\n${prinsipper}`);
-  lines.push('\nHåndsystemet: 🤜 neve=karbo · ✋ palme=protein · 👊 knyttneve=grønt · 👍 tommel=fett. Basis: 2P 2K 2G 2F. Lett økt −1K; hard/intervall +1K +0.5P; styrke +1P.');
+  lines.push('\nHåndsystemet (per måltid, aktiv mann): ✋ palme=protein · 🤜 neve=karbo · 👊 knyttneve=grønt · 👍 tommel=fett.\nBasis: 3P 2K 2G 2T per måltid. Justeringer: hviledag −1K; lett økt S1-2 <45min −0.5K; moderat økt ingen endring; hard/intervall +1K +0.5P; lang økt >90min eller race +2K +1P. Tommelregel kalorier: ~500 kcal forbrente = +1 neve ekstra karbo.');
   return lines.join('\n');
 }
 
@@ -2000,7 +2000,7 @@ async function autoLoadTodayBrief(okt){
   const recent=allOkter
     .filter(o=>o.status==='Gjennomført'&&o.dato&&o.type!=='Dagbok'&&o.type!=='Mål')
     .slice(0,7)
-    .map(o=>`${o.dato}: ${o.sport||o.type} ${o.varighet||'?'}min — snitt HR ${o.faktiskSnittHR||'?'}${o.distance?' ('+o.distance+'km)':''}${o.smerte!=null?' smerte:'+o.smerte:''}`)
+    .map(o=>`${o.dato}: ${o.sport||o.type} ${o.varighet||'?'}min — snitt HR ${o.faktiskSnittHR||'?'}${o.distance?' ('+o.distance+'km)':''}${o.kalorier?' '+o.kalorier+'kcal':''}${o.smerte!=null?' smerte:'+o.smerte:''}`)
     .join('\n');
 
   // Dagbok notes
@@ -2038,7 +2038,7 @@ ${recentDagbok?'\nDAGBOK\n'+recentDagbok:''}
 ${upcomingGoals?'\nKOMMENDE MÅL/LØYPER\n'+upcomingGoals:''}
 
 Svar med GYLDIG JSON og INGEN ANNEN TEKST i dette formatet:
-{"brief":"coaching-brief på norsk (4–6 setninger). Vurder: 1) Restitusjons-status ut fra søvntrend og belastning — juster anbefalt intensitet. 2) Konkret intensitetsguidance med spesifikke HR-tall fra sonene. 3) Kort ernæringstips.","nutrition":{"protein":2,"karbo":2,"gront":2,"fett":2,"notat":"ett konkret ernæringstips"}}`;
+{"brief":"coaching-brief på norsk (4–6 setninger). Vurder: 1) Restitusjons-status ut fra søvntrend og belastning — juster anbefalt intensitet. 2) Konkret intensitetsguidance med spesifikke HR-tall fra sonene. 3) Kort ernæringstips.","nutrition":{"protein":3,"karbo":2,"gront":2,"fett":2,"notat":"ett konkret ernæringstips basert på dagens økt og eventuell kaloriforbrenning"}}`;
 
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});

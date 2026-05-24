@@ -96,6 +96,24 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .okt-mark-btn.done{background:rgba(200,240,96,0.2);}
 .detail-panel{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:12px;display:none;}
 .detail-panel.open{display:block;}
+/* ── Session bottom sheet ─────────────────────────────────────────────── */
+.ss-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;display:none;animation:fadeIn .18s ease;}
+.ss-backdrop.open{display:block;}
+.session-sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:var(--bg2);border-radius:18px 18px 0 0;padding:12px 18px 36px;z-index:901;transform:translateY(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);max-height:88vh;overflow-y:auto;}
+.session-sheet.open{transform:translateY(0);}
+.ss-handle{width:36px;height:4px;background:var(--border-hi);border-radius:2px;margin:0 auto 16px;}
+.ss-title{font-size:19px;font-weight:700;color:var(--text1);margin-bottom:3px;line-height:1.25;}
+.ss-meta{font-size:12px;color:var(--text3);font-family:var(--mono);margin-bottom:14px;}
+.ss-badge{display:inline-block;background:rgba(200,240,96,0.10);border:0.5px solid rgba(200,240,96,0.2);border-radius:6px;padding:3px 9px;font-size:11px;color:var(--accent);font-family:var(--mono);margin:0 5px 6px 0;}
+.ss-badge.done{background:rgba(255,255,255,0.05);border-color:var(--border);color:var(--text2);}
+.ss-section{font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 7px;}
+.ss-instr{font-size:13px;line-height:1.75;color:var(--text2);white-space:pre-wrap;background:var(--bg3);border-radius:10px;padding:12px 14px;}
+.ss-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;}
+.ss-stat{background:var(--bg3);border-radius:10px;padding:10px 12px;}
+.ss-stat-lbl{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;}
+.ss-stat-val{font-size:17px;font-weight:700;color:var(--text1);margin-top:2px;}
+.ss-actions{display:flex;gap:10px;margin-top:20px;}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .detail-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;}
 .detail-title{font-size:15px;font-weight:600;}
 .detail-meta{font-size:10px;color:var(--text2);font-family:var(--mono);margin-top:2px;}
@@ -740,7 +758,7 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
           placeholder="Beskriv aktive skader, svakheter eller områder du er forsiktig med..."
           style="resize:vertical;min-height:72px;font-family:var(--sans);font-size:12px;line-height:1.6;"></textarea>
       </div>
-      <div class="form-field" style="margin-bottom:14px;">
+      <div class="form-field" style="margin-bottom:12px;">
         <label class="form-label">Rehabiliteringsstatus</label>
         <select class="setting-input" id="s-rehab-status" onchange="onInjuryInput()">
           <option value="ingen">Ingen aktive skader</option>
@@ -748,6 +766,13 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
           <option value="forsiktig">Vedlikehold/forsiktig</option>
           <option value="friskmeldt">Friskmeldt (følger med)</option>
         </select>
+      </div>
+      <div class="form-field" style="margin-bottom:14px;">
+        <label class="form-label">Fysioterapeut-protokoll</label>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">Lim inn hva fysioterapeuten har sagt — øvelser, restriksjoner, progresjon. Coachen bruker dette når den lager rehab- og styrkeøkter.</div>
+        <textarea class="setting-input" id="s-fysio-protokoll" rows="5" oninput="onInjuryInput()"
+          placeholder="Eks: Unngå full knefleksjon. Prioriter isometrisk styrke i hofte (clamshell, hip thrust). Rolige bevegelser, ingen smerte over 3/10. Øk belastning 10% per uke…"
+          style="resize:vertical;min-height:100px;font-family:var(--sans);font-size:12px;line-height:1.6;"></textarea>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="btn btn-sm btn-accent" onclick="saveInjurySettings()">Lagre</button>
@@ -938,13 +963,16 @@ async function saveSportsSettings() {
   } catch (e) { status.textContent = '✗ ' + e.message; }
 }
 
-function _applyInjuryData(skader, rehab) {
+function _applyInjuryData(skader, rehab, fysio) {
   skaderTekst = skader || '';
   rehabStatus = rehab || 'ingen';
+  fysioProtokoll = fysio || '';
   const ta = document.getElementById('s-skader');
   const sel = document.getElementById('s-rehab-status');
+  const fp = document.getElementById('s-fysio-protokoll');
   if (ta) ta.value = skaderTekst;
   if (sel) sel.value = rehabStatus;
+  if (fp) fp.value = fysioProtokoll;
 }
 
 async function loadSportsSettings() {
@@ -953,7 +981,7 @@ async function loadSportsSettings() {
   const lsFocus  = localStorage.getItem('sports_focus');
   if (lsActive) { try { activeSports = new Set(JSON.parse(lsActive)); } catch(_){} }
   if (lsFocus)  focusSport = lsFocus || null;
-  _applyInjuryData(localStorage.getItem('injury_skader'), localStorage.getItem('injury_rehab'));
+  _applyInjuryData(localStorage.getItem('injury_skader'), localStorage.getItem('injury_rehab'), localStorage.getItem('injury_fysio'));
   try {
     _applyFacilityData({
       fasiliteter: JSON.parse(localStorage.getItem('fac_fasiliteter') || '[]'),
@@ -972,9 +1000,10 @@ async function loadSportsSettings() {
     focusSport = d.focus || null;
     localStorage.setItem('sports_active', JSON.stringify([...activeSports]));
     localStorage.setItem('sports_focus', focusSport || '');
-    _applyInjuryData(d.skader, d.rehabStatus);
+    _applyInjuryData(d.skader, d.rehabStatus, d.fysioProtokoll);
     localStorage.setItem('injury_skader', skaderTekst);
     localStorage.setItem('injury_rehab', rehabStatus);
+    localStorage.setItem('injury_fysio', fysioProtokoll);
     _applyFacilityData(d);
     localStorage.setItem('fac_fasiliteter', JSON.stringify([...activeFacilities]));
     localStorage.setItem('fac_utstyr', JSON.stringify([...activeEquipment]));
@@ -1094,6 +1123,7 @@ async function saveFacilitySettings() {
 // ── Injury / rehab settings ───────────────────────────────────────────────────
 let skaderTekst = '';
 let rehabStatus = 'ingen';
+let fysioProtokoll = '';
 
 const REHAB_LABELS = {
   ingen: 'Ingen aktive skader',
@@ -1105,13 +1135,16 @@ const REHAB_LABELS = {
 function onInjuryInput() {
   skaderTekst = (document.getElementById('s-skader') || {}).value || '';
   rehabStatus = (document.getElementById('s-rehab-status') || {}).value || 'ingen';
+  fysioProtokoll = (document.getElementById('s-fysio-protokoll') || {}).value || '';
 }
 
 function getInjuryContext() {
   const hasActive = skaderTekst.trim() || (rehabStatus && rehabStatus !== 'ingen');
   if (!hasActive) return '';
   const statusLabel = REHAB_LABELS[rehabStatus] || rehabStatus;
-  return `⚠️ Skader/svakheter: ${skaderTekst.trim() || 'se status'}. Status: ${statusLabel}.`;
+  let ctx = `⚠️ Skader/svakheter: ${skaderTekst.trim() || 'se status'}. Status: ${statusLabel}.`;
+  if (fysioProtokoll.trim()) ctx += `\nFysioterapeut-protokoll:\n${fysioProtokoll.trim()}`;
+  return ctx;
 }
 
 // ── Coach prompt helpers ──────────────────────────────────────────────────────
@@ -1245,12 +1278,13 @@ async function saveInjurySettings() {
     const r = await fetch(url + '/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skader: skaderTekst, rehabStatus }),
+      body: JSON.stringify({ skader: skaderTekst, rehabStatus, fysioProtokoll }),
     });
     if (r.ok) {
       statusEl.textContent = '✓ Lagret';
       localStorage.setItem('injury_skader', skaderTekst);
       localStorage.setItem('injury_rehab', rehabStatus);
+      localStorage.setItem('injury_fysio', fysioProtokoll);
     } else { statusEl.textContent = '✗ Feil'; }
   } catch (e) { statusEl.textContent = '✗ ' + e.message; }
 }
@@ -1601,6 +1635,83 @@ function closeDetail(){
   document.getElementById('detail-panel').classList.remove('open');
   document.querySelectorAll('.okt-row').forEach(r=>r.classList.remove('selected'));
   currentOkt=null;
+}
+
+// ── Session bottom sheet (plan calendar + idag) ───────────────────────────────
+let sheetOkt = null;
+
+function openSessionSheet(okt) {
+  sheetOkt = okt;
+  document.getElementById('ss-title').textContent = okt.navn || '—';
+  const dateFmt = okt.dato ? formatDato(okt.dato) : '—';
+  const status = okt.status || 'To Do';
+  document.getElementById('ss-meta').textContent = `${dateFmt} · ${status}`;
+
+  // Badges
+  const isDone = status === 'Gjennomført';
+  const badges = [];
+  if (okt.type)        badges.push({label: okt.type, done: false});
+  if (okt.sport)       badges.push({label: okt.sport, done: isDone});
+  if (okt.varighet)    badges.push({label: okt.varighet + ' min', done: isDone});
+  if (okt.planlagtPuls && !isDone) badges.push({label: 'HR ' + okt.planlagtPuls, done: false});
+  document.getElementById('ss-badges').innerHTML = badges
+    .map(b => `<span class="ss-badge${b.done?' done':''}">${esc(b.label)}</span>`).join('');
+
+  // Instructions / notes
+  const instrSec = document.getElementById('ss-instr-section');
+  const instrLabel = document.getElementById('ss-instr-label');
+  const instrEl = document.getElementById('ss-instr');
+  if (okt.vurdering && okt.vurdering.trim()) {
+    instrLabel.textContent = isDone ? 'Notater' : 'Treningsinstruksjoner';
+    instrEl.textContent = okt.vurdering.trim();
+    instrSec.style.display = 'block';
+  } else {
+    instrSec.style.display = 'none';
+  }
+
+  // Stats for completed sessions
+  const statsSec = document.getElementById('ss-stats-section');
+  const statsEl = document.getElementById('ss-stats');
+  if (isDone && (okt.faktiskSnittHR || okt.faktiskMaksHR || okt.pace)) {
+    const stats = [];
+    if (okt.faktiskSnittHR) stats.push({l:'Snitt-HR', v: okt.faktiskSnittHR + ' bpm'});
+    if (okt.faktiskMaksHR)  stats.push({l:'Maks-HR',  v: okt.faktiskMaksHR  + ' bpm'});
+    if (okt.pace)           stats.push({l:'Pace',     v: okt.pace + '/km'});
+    if (okt.varighet)       stats.push({l:'Varighet', v: okt.varighet + ' min'});
+    statsEl.innerHTML = stats.map(s =>
+      `<div class="ss-stat"><div class="ss-stat-lbl">${s.l}</div><div class="ss-stat-val">${esc(s.v)}</div></div>`
+    ).join('');
+    statsSec.style.display = 'block';
+  } else {
+    statsSec.style.display = 'none';
+  }
+
+  document.getElementById('ss-backdrop').classList.add('open');
+  document.getElementById('session-sheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSessionSheet() {
+  document.getElementById('ss-backdrop').classList.remove('open');
+  document.getElementById('session-sheet').classList.remove('open');
+  document.body.style.overflow = '';
+  sheetOkt = null;
+}
+
+function openInOktView() {
+  const okt = sheetOkt;
+  closeSessionSheet();
+  if (!okt) return;
+  showView('okter');
+  setTimeout(() => {
+    // Find matching row by data-id attribute and click it
+    const row = document.querySelector(`.okt-row[data-id="${okt.id}"]`);
+    if (row) { row.click(); row.scrollIntoView({behavior:'smooth', block:'center'}); }
+    else {
+      // Fallback: populate detail panel directly
+      openDetail(okt, document.createElement('div'));
+    }
+  }, 150);
 }
 
 // ── Analyse økt ───────────────────────────────────────────────────────────────
@@ -2882,7 +2993,7 @@ function renderCurrentPlan(){
           const isDone=o.status==='Gjennomført';
           const meta=[o.varighet?o.varighet+' min':'',o.planlagtPuls?'HR '+o.planlagtPuls:'',isDone&&o.faktiskSnittHR?'HR '+o.faktiskSnittHR:''].filter(Boolean).join(' · ');
           const safeO=JSON.stringify({id:o.id,navn:o.navn,dato:o.dato,type:o.type,sport:o.sport,varighet:o.varighet,planlagtPuls:o.planlagtPuls,faktiskSnittHR:o.faktiskSnittHR,faktiskMaksHR:o.faktiskMaksHR,status:o.status,vurdering:o.vurdering,pace:o.pace});
-          return `<div class="cal-session${isDone?' done-session':''}" onclick='openDetail(${safeO},this)'>
+          return `<div class="cal-session${isDone?' done-session':''}" onclick='openSessionSheet(${safeO})'>
             <span class="cal-session-icon">${icon}</span>
             <div class="cal-session-body">
               <div class="cal-session-name">${esc(o.navn)}</div>
@@ -3030,9 +3141,11 @@ async function sendPlanMelding(){
     ].filter(Boolean).join(' · ')
   ).join('\n');
 
-  const planlagtLines=planlagt.slice(0,20).map(o=>
-    `[${o.id}] ${o.dato||'?'}: ${o.navn} — ${o.type||'?'}${o.varighet?' ('+o.varighet+' min)':''}${o.planlagtPuls?' HR:'+o.planlagtPuls:''}`
-  ).join('\n');
+  const planlagtLines=planlagt.slice(0,20).map(o=>{
+    const base=`[${o.id}] ${o.dato||'?'}: ${o.navn} — ${o.type||'?'}${o.varighet?' ('+o.varighet+' min)':''}${o.planlagtPuls?' HR:'+o.planlagtPuls:''}`;
+    const instr=o.vurdering?`\n    → ${o.vurdering.slice(0,120)}${o.vurdering.length>120?'…':''}`:''
+    return base+instr;
+  }).join('\n');
 
   const calLines=planCalendarEvents.map(e=>`${e.date}: ${e.title}`).join('\n');
 
@@ -3088,6 +3201,9 @@ Når du lager eller endrer en plan, output ALLTID et JSON-blokk. Hvert element k
 }
 \`\`\`
 Gyldige type-verdier: Sone 2, Terskel, Bakkeintervall, Styrke, Rehab, Race, Testløp.
+For Styrke/Rehab: bruk alltid "beskrivelse" med konkrete øvelser, sett/reps og eventuelle restriksjoner (f.eks. "3×12 clamshell · 2×15 Copenhagen plank · 3×10 hip thrust — unngå smerte >3/10").
+For løpeøkter: bruk "beskrivelse" til strukturert intervallopplegg eller temponot.
+"beskrivelse" vises for brukeren i appen og lagres i Notion — det er brukerens faktiske treningsprogram.
 For analyse/diskusjon uten planendring: svar normalt uten JSON-blokk.
 Svar på norsk, vær konkret og direkte.`;
 
@@ -3300,6 +3416,26 @@ if('serviceWorker' in navigator){
       Coachen justerer porsjonene basert på dagens økt og treningsbelastning.
     </div>
     <button class="btn btn-sm" onclick="closeHandSystemModal()" style="margin-top:16px;width:100%;">Lukk</button>
+  </div>
+</div>
+<!-- ══ SESSION BOTTOM SHEET ══ -->
+<div class="ss-backdrop" id="ss-backdrop" onclick="closeSessionSheet()"></div>
+<div class="session-sheet" id="session-sheet">
+  <div class="ss-handle"></div>
+  <div class="ss-title" id="ss-title">—</div>
+  <div class="ss-meta" id="ss-meta">—</div>
+  <div id="ss-badges"></div>
+  <div id="ss-instr-section" style="display:none;">
+    <div class="ss-section" id="ss-instr-label">Treningsinstruksjoner</div>
+    <div class="ss-instr" id="ss-instr"></div>
+  </div>
+  <div id="ss-stats-section" style="display:none;">
+    <div class="ss-section">Resultater</div>
+    <div class="ss-stats" id="ss-stats"></div>
+  </div>
+  <div class="ss-actions">
+    <button class="btn" style="flex:1;" onclick="closeSessionSheet()">Lukk</button>
+    <button class="btn btn-accent" style="flex:1;" id="ss-edit-btn" onclick="openInOktView()">Rediger →</button>
   </div>
 </div>
 <div id="toast"></div>

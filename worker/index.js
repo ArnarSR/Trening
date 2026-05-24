@@ -777,7 +777,9 @@ async function applyPlanSessions(env, sessions) {
     if (s.varighet)    props['Varighet (min)'] = { number: Number(s.varighet) };
     if (s.planlagtPuls)props['Planlagt puls']  = { rich_text: [{ text: { content: s.planlagtPuls } }] };
     if (notionSport)   props['Sport']          = { select: { name: notionSport.type } };
-    if (s.vurdering)   props['Vurdering']      = { rich_text: [{ text: { content: s.vurdering } }] };
+    // beskrivelse = coach pre-session instructions; falls back to vurdering
+    const notesContent = s.beskrivelse || s.vurdering || '';
+    if (notesContent) props['Vurdering'] = { rich_text: [{ text: { content: notesContent.slice(0, 2000) } }] };
 
     if (action === 'update' && s.id) {
       // PATCH existing session

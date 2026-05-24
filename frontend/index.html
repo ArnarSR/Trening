@@ -188,8 +188,12 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 /* ── Training calendar ─────────────────────────────────────────────── */
 .plan-cal{padding:4px 0;}
 .plan-cal-week{margin-bottom:6px;}
-.plan-cal-week-hdr{font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:8px 14px 5px;border-top:0.5px solid var(--border);}
+.plan-cal-week-hdr{font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:8px 14px 5px;border-top:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
 .plan-cal-week:first-child .plan-cal-week-hdr{border-top:none;}
+.plan-cal-week-hdr:active{background:var(--bg3);}
+.plan-cal-week-summary{font-size:11px;color:var(--text2);letter-spacing:0;text-transform:none;display:flex;align-items:center;gap:5px;}
+.plan-cal-week-body{display:block;}
+.plan-cal-week.collapsed .plan-cal-week-body{display:none;}
 .cal-day{display:flex;align-items:center;gap:12px;padding:7px 14px;border-bottom:0.5px solid var(--border);}
 .cal-day:last-child{border-bottom:none;}
 .cal-day.is-today{background:rgba(200,240,96,0.06);}
@@ -2861,6 +2865,11 @@ function renderPlanBubble(role, text){
   return wrap;
 }
 
+function togglePlanWeek(id){
+  const el=document.getElementById(id);
+  if(el) el.classList.toggle('collapsed');
+}
+
 function showPlanEmpty(){
   const chat=document.getElementById('plan-chat');
   if(!chat.querySelector('.plan-empty')){
@@ -2975,8 +2984,27 @@ function renderCurrentPlan(){
     const week=allDays.slice(w,w+7);
     const wStart=new Date(week[0]+'T12:00:00');
     const wEnd=new Date(week[6]+'T12:00:00');
-    const wLabel=`Uke — ${wStart.getDate()}. ${MONTH_SHORT[wStart.getMonth()]} – ${wEnd.getDate()}. ${MONTH_SHORT[wEnd.getMonth()]}`;
-    calHtml+=`<div class="plan-cal-week"><div class="plan-cal-week-hdr">${wLabel}</div>`;
+    const wLabel=`${wStart.getDate()}. ${MONTH_SHORT[wStart.getMonth()]} – ${wEnd.getDate()}. ${MONTH_SHORT[wEnd.getMonth()]}`;
+    const weekId=`plan-week-${w}`;
+
+    // Collapse past weeks by default (all days before today)
+    const isPastWeek=week.every(d=>d<today);
+    const isCurrentWeek=week.some(d=>d===today)||(week[0]<=today&&week[6]>=today);
+
+    // Build summary for collapsed past-week header
+    const weekAllSessions=week.flatMap(d=>calSessions[d]||[]);
+    const doneCount=weekAllSessions.filter(o=>o.status==='Gjennomført').length;
+    const summaryHtml=isPastWeek&&doneCount>0
+      ?`<span class="plan-cal-week-summary"><span style="color:var(--accent);">✓ ${doneCount}</span><span style="color:var(--text3);">gjennomført</span><span style="opacity:.5;font-size:13px;">${isPastWeek?'›':''}</span></span>`
+      :(isPastWeek?`<span class="plan-cal-week-summary" style="opacity:.4;">ingen</span>`:'<span style="opacity:.3;font-size:13px;">›</span>');
+
+    calHtml+=`<div class="plan-cal-week${isPastWeek?' collapsed':''}" id="${weekId}">
+      <div class="plan-cal-week-hdr" onclick="togglePlanWeek('${weekId}')">
+        <span>${wLabel}</span>
+        ${summaryHtml}
+      </div>
+      <div class="plan-cal-week-body">`;
+
     week.forEach((date,i)=>{
       const sessions=calSessions[date]||[];
       const isToday=date===today;
@@ -3001,7 +3029,6 @@ function renderCurrentPlan(){
             </div>
           </div>`;
         }).join('');
-        // If multiple sessions, stack them
         calHtml+=sessions.length>1
           ?`<div style="flex:1;display:flex;flex-direction:column;gap:5px;">${sessionsHtml}</div>`
           :sessionsHtml;
@@ -3010,7 +3037,7 @@ function renderCurrentPlan(){
       }
       calHtml+='</div>';
     });
-    calHtml+='</div>';
+    calHtml+='</div></div>'; // close week-body + week
   }
   calHtml+='</div>';
   html+=calHtml;

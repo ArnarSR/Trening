@@ -123,6 +123,19 @@ export default {
         return json({ ok: true, id: data.id });
       }
 
+      // GET /api/settings
+      if (path === '/api/settings' && request.method === 'GET') {
+        const val = await env.SETTINGS.get('sports_settings');
+        return json(val ? JSON.parse(val) : { active: [], focus: null });
+      }
+
+      // POST /api/settings
+      if (path === '/api/settings' && request.method === 'POST') {
+        const body = await request.json();
+        await env.SETTINGS.put('sports_settings', JSON.stringify(body));
+        return json({ ok: true });
+      }
+
       // GET /api/prinsipper
       if (path === '/api/prinsipper' && request.method === 'GET') {
         return getPrinsipper(env);

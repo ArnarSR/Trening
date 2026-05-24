@@ -130,6 +130,10 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:var(--sans);font
 .chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
 .chip{display:inline-flex;align-items:center;font-size:11px;padding:6px 11px;border-radius:20px;border:0.5px solid var(--border-hi);background:transparent;color:var(--text2);cursor:pointer;-webkit-tap-highlight-color:transparent;}
 .chip:active{background:var(--bg3);color:var(--text);}
+.sport-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:7px 12px;border-radius:20px;border:0.5px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s;user-select:none;}
+.sport-chip.active{border-color:var(--accent2);color:var(--accent2);background:rgba(139,255,200,0.07);}
+.sport-chip.focus{border-color:var(--accent);color:var(--text);background:rgba(200,240,96,0.13);font-weight:600;}
+.sport-chip:active{opacity:.7;}
 .lap-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px;}
 .lap-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;min-width:380px;}
 .lap-table th{text-align:left;color:var(--text3);padding:4px 10px 7px 0;border-bottom:0.5px solid var(--border);}
@@ -652,6 +656,18 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     </div>
   </div>
   <div class="settings-section">
+    <div class="settings-title">Treningsformer</div>
+    <div class="settings-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Huk av treningsformene du driver med. Trykk én gang for å aktivere — trykk igjen for å sette den som fokussport (★). Fokussport vektes ekstra i coaching-råd.</div>
+      <div id="sports-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;"></div>
+      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px;" id="sports-focus-label"></div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-sm btn-accent" onclick="saveSportsSettings()">Lagre</button>
+        <span id="sports-save-status" style="font-size:11px;font-family:var(--mono);color:var(--text2);"></span>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
     <div class="settings-title">Pulssoner</div>
     <div class="settings-card">
       <div id="zones-display" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;font-family:var(--mono);"></div>
@@ -724,6 +740,102 @@ function getZone(hr){return ZONES.find(z=>hr>=z.min&&hr<=z.max)||ZONES[0];}
 const TYPE_MAP={'Sone 2':'type-s2','Bakkeintervall':'type-bk','Terskel':'type-ts','Styrke':'type-st','Race':'type-ra','Rehab':'type-re','Testløp':'type-tl'};
 const STATUS_MAP={'Gjennomført':'status-done','To Do':'status-todo','Hoppet over':'status-skip'};
 const STATUS_ICON={'Gjennomført':'✓','To Do':'·','Hoppet over':'✕'};
+
+// ── Sports settings ───────────────────────────────────────────────────────────
+const ALL_SPORTS = [
+  { key: 'lop',           label: '🏃 Løp' },
+  { key: 'sykkel',        label: '🚴 Sykkel' },
+  { key: 'terrengsykkel', label: '🚵 Terrengsykkel' },
+  { key: 'svomming',      label: '🏊 Svømming' },
+  { key: 'fjelltur',      label: '🥾 Fjelltur' },
+  { key: 'gatur',         label: '🚶 Gåtur' },
+  { key: 'randonee',      label: '🎿 Randonee' },
+  { key: 'langrenn',      label: '⛷️ Langrenn' },
+  { key: 'alpint',        label: '⛷️ Alpint' },
+  { key: 'styrke',        label: '💪 Styrke' },
+  { key: 'yoga',          label: '🧘 Yoga' },
+  { key: 'roing',         label: '🚣 Roing' },
+  { key: 'sup',           label: '🏄 SUP' },
+  { key: 'rulleskoyster', label: '🛼 Rulleskøyter' },
+  { key: 'fotball',       label: '⚽ Fotball' },
+  { key: 'tennis',        label: '🎾 Tennis' },
+];
+let activeSports = new Set();
+let focusSport = null;
+
+function renderSportsGrid() {
+  const grid = document.getElementById('sports-grid');
+  const focusLabel = document.getElementById('sports-focus-label');
+  if (!grid) return;
+  grid.innerHTML = ALL_SPORTS.map(s => {
+    const isActive = activeSports.has(s.key);
+    const isFocus  = focusSport === s.key;
+    const cls = isFocus ? 'sport-chip focus' : isActive ? 'sport-chip active' : 'sport-chip';
+    return `<button class="${cls}" onclick="toggleSport('${s.key}')">${s.label}${isFocus ? ' ★' : ''}</button>`;
+  }).join('');
+  const fl = ALL_SPORTS.find(s => s.key === focusSport);
+  if (focusLabel) focusLabel.textContent = fl ? `Fokussport: ${fl.label}` : 'Ingen fokussport valgt — trykk en aktiv form én gang til.';
+}
+
+function toggleSport(key) {
+  if (!activeSports.has(key)) {
+    activeSports.add(key);           // inactive → active
+  } else if (focusSport !== key) {
+    focusSport = key;                // active → focus
+  } else {
+    activeSports.delete(key);        // focus → off
+    focusSport = null;
+  }
+  renderSportsGrid();
+}
+
+async function saveSportsSettings() {
+  const url = getWorkerUrl(); if (!url) return;
+  const status = document.getElementById('sports-save-status');
+  status.textContent = 'Lagrer…';
+  try {
+    const r = await fetch(url + '/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: [...activeSports], focus: focusSport }),
+    });
+    if (r.ok) {
+      status.textContent = '✓ Lagret';
+      localStorage.setItem('sports_active', JSON.stringify([...activeSports]));
+      localStorage.setItem('sports_focus', focusSport || '');
+    } else {
+      status.textContent = '✗ Feil';
+    }
+  } catch (e) { status.textContent = '✗ ' + e.message; }
+}
+
+async function loadSportsSettings() {
+  // Optimistic load from localStorage, then refresh from KV
+  const lsActive = localStorage.getItem('sports_active');
+  const lsFocus  = localStorage.getItem('sports_focus');
+  if (lsActive) { try { activeSports = new Set(JSON.parse(lsActive)); } catch(_){} }
+  if (lsFocus)  focusSport = lsFocus || null;
+  renderSportsGrid();
+
+  const url = getWorkerUrl(); if (!url) return;
+  try {
+    const r = await fetch(url + '/api/settings');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.active) activeSports = new Set(d.active);
+    focusSport = d.focus || null;
+    localStorage.setItem('sports_active', JSON.stringify([...activeSports]));
+    localStorage.setItem('sports_focus', focusSport || '');
+    renderSportsGrid();
+  } catch (_) {}
+}
+
+function getSportsContext() {
+  if (!activeSports.size) return '';
+  const fl = ALL_SPORTS.find(s => s.key === focusSport);
+  const activeLabels = ALL_SPORTS.filter(s => activeSports.has(s.key)).map(s => s.label).join(', ');
+  return `Aktive treningsformer: ${activeLabels}.${fl ? ' Fokussport (primær): ' + fl.label + '.' : ''}`;
+}
 
 // ── State ────────────────────────────────────────────────────────────────────
 let allOkter = [];
@@ -1078,7 +1190,8 @@ async function analyseOkt(){
   const _zoneStr=(typeof ZONES!=='undefined'&&ZONES.length)?ZONES.map(z=>`${z.n}: ${z.min===0?'<'+z.max:z.max===999?z.min+'+':z.min+'–'+z.max}`).join(' | '):'ukjent';
   const _kontekst=typeof treningskontekst!=='undefined'?treningskontekst:'';
   const _prinsipper=localStorage.getItem('fase_prinsipper')||'';
-  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.\nHR-soner: ${_zoneStr}.${_kontekst?'\n\nUtøverprofil:\n'+_kontekst:''}${_prinsipper?'\n\nFase-prinsipper:\n'+_prinsipper:''}\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
+  const _sportsCtx=getSportsContext();
+  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.\nHR-soner: ${_zoneStr}.${_sportsCtx?'\n'+_sportsCtx:''}${_kontekst?'\n\nUtøverprofil:\n'+_kontekst:''}${_prinsipper?'\n\nFase-prinsipper:\n'+_prinsipper:''}\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
   const section=document.getElementById('dp-analysis-section');
   const box=document.getElementById('dp-analysis-text');
   section.style.display='block';
@@ -1572,8 +1685,9 @@ async function autoLoadTodayBrief(okt){
     .map(g=>`${g.dato}: ${g.navn}`)
     .join('\n');
 
+  const sportsCtx=getSportsContext();
   const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.
-HR-soner: ${_zStr||'ukjent'}.${_ktx?'\n\nUtøverprofil:\n'+_ktx:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
+HR-soner: ${_zStr||'ukjent'}.${sportsCtx?'\n'+sportsCtx:''}${_ktx?'\n\nUtøverprofil:\n'+_ktx:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
 
 DAGENS PLANLAGTE ØKT
 ${okt.navn} — ${okt.type||'—'}, ${okt.varighet||'?'}min${okt.planlagtPuls?', mål-HR: '+okt.planlagtPuls:''}
@@ -2607,6 +2721,7 @@ loadCalSettings();
 loadProfilFields();
 loadPrinsipper();
 loadKontekst();
+loadSportsSettings();
 renderZones();
 fetchOkter()
   .then(()=>{

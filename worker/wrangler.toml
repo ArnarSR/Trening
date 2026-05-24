@@ -2,6 +2,10 @@ name = "trening-arnar"
 main = "index.js"
 compatibility_date = "2024-01-01"
 
+[[kv_namespaces]]
+binding = "SETTINGS"
+id = "8118722ea98048a2893559e06d021c74"
+
 # Secrets settes via CLI eller Cloudflare dashboard — aldri her:
 # wrangler secret put NOTION_TOKEN
 # wrangler secret put STRAVA_CLIENT_ID

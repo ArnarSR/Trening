@@ -904,6 +904,8 @@ function buildNotionProps(body) {
     props['Smerte 0-10'] = { number: body.smerte };
   if (body.medVogn !== undefined)
     props['Med vogn'] = { checkbox: body.medVogn };
+  if (body.stravaId !== undefined)
+    props['Strava ID'] = { rich_text: [{ text: { content: String(body.stravaId) } }] };
   return props;
 }
 

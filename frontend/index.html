@@ -1472,7 +1472,7 @@ function updateStats(){
   const fase=localStorage.getItem('fase_navn')||'—';
   const faseSub=(localStorage.getItem('fase_prinsipper')||'').split('\n')[0].replace(/^[•\-]\s*/,'')||'Aktiv restitusjon';
   const paceToSec=p=>{const[m,s]=(p||'').split(':');return m&&s?+m*60+ +s:Infinity;};
-  const prSessions=allOkter.filter(o=>(o.type==='Testløp'||o.type==='Race')&&o.status==='Gjennomført'&&o.pace);
+  const prSessions=allOkter.filter(o=>(o.type==='Testløp'||o.type==='Race')&&o.status==='Gjennomført'&&o.pace&&(o.distanse==null||o.distanse>=1));
   prSessions.sort((a,b)=>paceToSec(a.pace)-paceToSec(b.pace));
   const bestPR=prSessions[0];
   const prText=bestPR?bestPR.pace+'/km':'—';

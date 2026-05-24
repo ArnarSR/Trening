@@ -40,11 +40,15 @@ const TYPE_COLOR = {
   'Race': '3', 'Styrke': '7', 'Rehab': '9', 'Testløp': '4',
 };
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+// Populated from env.ALLOWED_ORIGIN at the start of each request
+let _corsOrigin = 'https://arnarsr.github.io';
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': _corsOrigin,
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
 
 const SPORT_MAP = {
   run:              { type: '🏃 Løp',           icon: '🏃' },
@@ -74,8 +78,9 @@ const SPORT_MAP = {
 
 export default {
   async fetch(request, env) {
+    _corsOrigin = env.ALLOWED_ORIGIN || 'https://arnarsr.github.io';
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS });
+      return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
     const url = new URL(request.url);
@@ -85,8 +90,11 @@ export default {
     if (authErr) return authErr;
 
     try {
-      // GET /api/okter — paginated cursor loop
+      // GET /api/okter — KV cache + paginated cursor loop
       if (path === '/api/okter' && request.method === 'GET') {
+        const cached = await env.SETTINGS.get('okter_cache');
+        if (cached) return json(JSON.parse(cached));
+
         const pages = [];
         let cursor;
         do {
@@ -103,7 +111,9 @@ export default {
           pages.push(...data.results);
           cursor = data.has_more ? data.next_cursor : null;
         } while (cursor);
-        return json({ okter: pages.map(mapPage) });
+        const result = { okter: pages.map(mapPage) };
+        await env.SETTINGS.put('okter_cache', JSON.stringify(result), { expirationTtl: 300 });
+        return json(result);
       }
 
       // PATCH /api/okter/:id
@@ -116,6 +126,7 @@ export default {
         const res = await notionRequest(env, 'PATCH', `/pages/${pageId}`, patchBody);
         const data = await res.json();
         if (!res.ok) return json({ error: 'Notion feil', detail: data }, res.status || 500);
+        await env.SETTINGS.delete('okter_cache');
         return json({ ok: true, id: data.id });
       }
 
@@ -519,6 +530,7 @@ async function syncStrava(env) {
     }
   }
 
+  if (synced + created > 0) await env.SETTINGS.delete('okter_cache');
   return json({ synced, created, errors, total: activities.length, capped: synced + created + errors >= MAX_WRITES });
 }
 
@@ -805,7 +817,7 @@ function notionRequest(env, method, path, body) {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
   });
 }
 

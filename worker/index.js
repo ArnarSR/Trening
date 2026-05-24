@@ -1,7 +1,5 @@
 const NOTION_API = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
-const DB_ID = '953ee9299ea345fb8a3d77cf8237116a';
-const HELSE_DB_ID = '2e5c1e0abf4e4fd69c4c88ae89c32d5f';
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
@@ -97,7 +95,7 @@ export default {
             page_size: 100,
           };
           if (cursor) body.start_cursor = cursor;
-          const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, body);
+          const res = await notionRequest(env, 'POST', `/databases/${env.DB_ID}/query`, body);
           const data = await res.json();
           if (!res.ok || !data.results) {
             return json({ error: 'Notion feil', detail: data }, res.status || 500);
@@ -117,6 +115,7 @@ export default {
         if (body.icon) patchBody.icon = { type: 'emoji', emoji: body.icon };
         const res = await notionRequest(env, 'PATCH', `/pages/${pageId}`, patchBody);
         const data = await res.json();
+        if (!res.ok) return json({ error: 'Notion feil', detail: data }, res.status || 500);
         return json({ ok: true, id: data.id });
       }
 
@@ -127,10 +126,11 @@ export default {
         if (body.navn) {
           props['Navn'] = { title: [{ text: { content: body.navn } }] };
         }
-        const createBody = { parent: { database_id: DB_ID }, properties: props };
+        const createBody = { parent: { database_id: env.DB_ID }, properties: props };
         if (body.icon) createBody.icon = { type: 'emoji', emoji: body.icon };
         const res = await notionRequest(env, 'POST', '/pages', createBody);
         const data = await res.json();
+        if (!res.ok) return json({ error: 'Notion feil', detail: data }, res.status || 500);
         return json({ ok: true, id: data.id });
       }
 
@@ -151,29 +151,29 @@ export default {
 
       // GET /api/prinsipper
       if (path === '/api/prinsipper' && request.method === 'GET') {
-        return getPrinsipper(env);
+        return getNamedPage(env, 'Fase-prinsipper');
       }
 
       // POST /api/prinsipper
       if (path === '/api/prinsipper' && request.method === 'POST') {
         const { tekst } = await request.json();
-        return savePrinsipper(env, tekst || '');
+        return saveNamedPage(env, 'Fase-prinsipper', tekst || '', '📌');
       }
 
       // GET /api/kontekst
       if (path === '/api/kontekst' && request.method === 'GET') {
-        return getKontekst(env);
+        return getNamedPage(env, 'Treningskontekst');
       }
 
       // POST /api/kontekst
       if (path === '/api/kontekst' && request.method === 'POST') {
         const { tekst } = await request.json();
-        return saveKontekst(env, tekst || '');
+        return saveNamedPage(env, 'Treningskontekst', tekst || '', '🧠');
       }
 
       // GET /api/goals
       if (path === '/api/goals' && request.method === 'GET') {
-        const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
+        const res = await notionRequest(env, 'POST', `/databases/${env.DB_ID}/query`, {
           filter: { or: [
             { property: 'Type', select: { equals: 'Race' } },
             { property: 'Type', select: { equals: 'Mål' } },
@@ -198,9 +198,10 @@ export default {
         if (body.dato)        props['Dato']          = { date: { start: body.dato } };
         if (body.planlagtPuls) props['Planlagt puls'] = { rich_text: [{ text: { content: body.planlagtPuls } }] };
         if (body.vurdering)   props['Vurdering']     = { rich_text: [{ text: { content: body.vurdering } }] };
-        const createBody = { parent: { database_id: DB_ID }, properties: props, icon: { type: 'emoji', emoji: icon } };
+        const createBody = { parent: { database_id: env.DB_ID }, properties: props, icon: { type: 'emoji', emoji: icon } };
         const res  = await notionRequest(env, 'POST', '/pages', createBody);
         const data = await res.json();
+        if (!res.ok) return json({ error: 'Notion feil', detail: data }, res.status || 500);
         return json({ ok: true, id: data.id });
       }
 
@@ -215,15 +216,16 @@ export default {
         };
         if (body.vurdering) props['Vurdering'] = { rich_text: [{ text: { content: body.vurdering } }] };
         if (body.smerte != null) props['Smerte 0-10'] = { number: body.smerte };
-        const createBody = { parent: { database_id: DB_ID }, properties: props, icon: { type: 'emoji', emoji: body.icon || '📝' } };
+        const createBody = { parent: { database_id: env.DB_ID }, properties: props, icon: { type: 'emoji', emoji: body.icon || '📝' } };
         const res  = await notionRequest(env, 'POST', '/pages', createBody);
         const data = await res.json();
+        if (!res.ok) return json({ error: 'Notion feil', detail: data }, res.status || 500);
         return json({ ok: true, id: data.id });
       }
 
       // GET /api/helse
       if (path === '/api/helse' && request.method === 'GET') {
-        const res = await notionRequest(env, 'POST', `/databases/${HELSE_DB_ID}/query`, {
+        const res = await notionRequest(env, 'POST', `/databases/${env.HELSE_DB_ID}/query`, {
           sorts: [{ property: 'Dato', direction: 'descending' }],
           page_size: 30,
         });
@@ -257,7 +259,7 @@ export default {
         };
 
         // Check if an entry already exists for this date — PATCH it if so
-        const existing = await notionRequest(env, 'POST', `/databases/${HELSE_DB_ID}/query`, {
+        const existing = await notionRequest(env, 'POST', `/databases/${env.HELSE_DB_ID}/query`, {
           filter: { property: 'Dato', date: { equals: dato } },
           page_size: 1,
         });
@@ -267,13 +269,15 @@ export default {
         if (existPage) {
           const res = await notionRequest(env, 'PATCH', `/pages/${existPage.id}`, { properties: buildHelseProps(body) });
           const data = await res.json();
+          if (!res.ok) return json({ error: 'Notion feil', detail: data }, res.status || 500);
           return json({ ok: true, id: data.id, updated: true });
         }
 
         const res = await notionRequest(env, 'POST', '/pages', {
-          parent: { database_id: HELSE_DB_ID }, properties: buildHelseProps(body),
+          parent: { database_id: env.HELSE_DB_ID }, properties: buildHelseProps(body),
         });
         const data = await res.json();
+        if (!res.ok) return json({ error: 'Notion feil', detail: data }, res.status || 500);
         return json({ ok: true, id: data.id, updated: false });
       }
 
@@ -501,7 +505,7 @@ async function syncStrava(env) {
       if (pace)              props['Pace']              = { rich_text: [{ text: { content: pace } }] };
       if (sport)             props['Sport']             = { select: { name: sport.type } };
 
-      const createBody = { parent: { database_id: DB_ID }, properties: props };
+      const createBody = { parent: { database_id: env.DB_ID }, properties: props };
       if (sport) createBody.icon = { type: 'emoji', emoji: sport.icon };
       const newPage = await notionRequest(env, 'POST', '/pages', createBody);
       const newData = await newPage.json();
@@ -585,7 +589,7 @@ async function queryNotionSince(env, since) {
       page_size: 100,
     };
     if (cursor) body.start_cursor = cursor;
-    const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, body);
+    const res = await notionRequest(env, 'POST', `/databases/${env.DB_ID}/query`, body);
     const data = await res.json();
     if (data.results) pages.push(...data.results);
     cursor = data.has_more ? data.next_cursor : null;
@@ -600,57 +604,11 @@ function formatPace(speedMs) {
   return `${mins}:${secs}`;
 }
 
-// ── Prinsipper (Notion-backed) ────────────────────────────────────────────────
+// ── Named page helpers (Notion-backed) ───────────────────────────────────────
 
-async function getPrinsipper(env) {
-  const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
-    filter: { property: 'Navn', title: { equals: 'Fase-prinsipper' } },
-    page_size: 1,
-  });
-  const data = await res.json();
-  const page = data.results?.[0];
-  if (!page) return json({ tekst: '', id: null });
-  const tekst = page.properties['Vurdering']?.rich_text?.[0]?.plain_text || '';
-  return json({ tekst, id: page.id });
-}
-
-async function savePrinsipper(env, tekst) {
-  // Check if page already exists
-  const findRes = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
-    filter: { property: 'Navn', title: { equals: 'Fase-prinsipper' } },
-    page_size: 1,
-  });
-  const findData = await findRes.json();
-  const existing = findData.results?.[0];
-
-  const props = {
-    'Vurdering': { rich_text: [{ text: { content: tekst } }] },
-  };
-
-  if (existing) {
-    const res = await notionRequest(env, 'PATCH', `/pages/${existing.id}`, { properties: props });
-    const data = await res.json();
-    if (!res.ok) return json({ error: 'Notion feil', detail: data }, 500);
-    return json({ ok: true, id: existing.id });
-  } else {
-    const body = {
-      parent: { database_id: DB_ID },
-      properties: {
-        'Navn': { title: [{ text: { content: 'Fase-prinsipper' } }] },
-        ...props,
-      },
-      icon: { type: 'emoji', emoji: '📌' },
-    };
-    const res = await notionRequest(env, 'POST', '/pages', body);
-    const data = await res.json();
-    if (!res.ok) return json({ error: 'Notion feil', detail: data }, 500);
-    return json({ ok: true, id: data.id });
-  }
-}
-
-async function getKontekst(env) {
-  const res = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
-    filter: { property: 'Navn', title: { equals: 'Treningskontekst' } },
+async function getNamedPage(env, navn) {
+  const res = await notionRequest(env, 'POST', `/databases/${env.DB_ID}/query`, {
+    filter: { property: 'Navn', title: { equals: navn } },
     page_size: 1,
   });
   const data = await res.json();
@@ -659,22 +617,25 @@ async function getKontekst(env) {
   return json({ tekst: page.properties['Vurdering']?.rich_text?.[0]?.plain_text || '', id: page.id });
 }
 
-async function saveKontekst(env, tekst) {
-  const findRes  = await notionRequest(env, 'POST', `/databases/${DB_ID}/query`, {
-    filter: { property: 'Navn', title: { equals: 'Treningskontekst' } }, page_size: 1,
+async function saveNamedPage(env, navn, tekst, ikon = '📌') {
+  const findRes = await notionRequest(env, 'POST', `/databases/${env.DB_ID}/query`, {
+    filter: { property: 'Navn', title: { equals: navn } },
+    page_size: 1,
   });
   const existing = (await findRes.json()).results?.[0];
-  const props    = { 'Vurdering': { rich_text: [{ text: { content: tekst } }] } };
+  const props = { 'Vurdering': { rich_text: [{ text: { content: tekst } }] } };
+
   if (existing) {
     const res = await notionRequest(env, 'PATCH', `/pages/${existing.id}`, { properties: props });
     const data = await res.json();
     if (!res.ok) return json({ error: 'Notion feil', detail: data }, 500);
     return json({ ok: true, id: existing.id });
   }
-  const res  = await notionRequest(env, 'POST', '/pages', {
-    parent: { database_id: DB_ID },
-    properties: { 'Navn': { title: [{ text: { content: 'Treningskontekst' } }] }, ...props },
-    icon: { type: 'emoji', emoji: '🧠' },
+
+  const res = await notionRequest(env, 'POST', '/pages', {
+    parent: { database_id: env.DB_ID },
+    properties: { 'Navn': { title: [{ text: { content: navn } }] }, ...props },
+    icon: { type: 'emoji', emoji: ikon },
   });
   const data = await res.json();
   if (!res.ok) return json({ error: 'Notion feil', detail: data }, 500);
@@ -784,11 +745,12 @@ async function createPlanSessions(env, sessions) {
     if (s.planlagtPuls) props['Planlagt puls']   = { rich_text: [{ text: { content: s.planlagtPuls } }] };
     if (notionSport)    props['Sport']           = { select: { name: notionSport.type } };
 
-    const createBody = { parent: { database_id: DB_ID }, properties: props };
+    const createBody = { parent: { database_id: env.DB_ID }, properties: props };
     if (notionSport) createBody.icon = { type: 'emoji', emoji: notionSport.icon };
 
     const nRes  = await notionRequest(env, 'POST', '/pages', createBody);
     const nData = await nRes.json();
+    if (!nRes.ok) { created++; continue; }
     if (nData.id) notionIds.push(nData.id);
 
     // GCal event

@@ -186,6 +186,12 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 .race-result{display:inline-block;font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:4px;background:rgba(139,255,200,0.1);color:var(--accent2);margin-top:5px;}
 .priority-a{color:var(--danger);}.priority-b{color:var(--warn);}.priority-c{color:var(--text3);}
 .add-goal-form{background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:var(--rlg);padding:16px;margin-bottom:14px;}
+#toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast-msg{padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,0.4);opacity:0;transition:opacity 0.2s;pointer-events:auto;}
+.toast-msg.show{opacity:1;}
+.toast-info{background:var(--bg2);border:1px solid var(--border-hi);color:var(--text1);}
+.toast-ok{background:rgba(139,255,200,0.15);border:1px solid var(--accent2);color:var(--accent2);}
+.toast-err{background:rgba(255,99,99,0.15);border:1px solid var(--danger);color:var(--danger);}
 </style>
 </head>
 <body>
@@ -1040,6 +1046,50 @@ function getInjuryContext() {
   return `⚠️ Skader/svakheter: ${skaderTekst.trim() || 'se status'}. Status: ${statusLabel}.`;
 }
 
+// ── Coach prompt helpers ──────────────────────────────────────────────────────
+function buildCoachContext() {
+  const zStr = (typeof ZONES !== 'undefined' && ZONES.length)
+    ? ZONES.map(z => `${z.n}: ${z.min===0?'<'+z.max:z.max===999?z.min+'+':z.min+'–'+z.max}`).join(' | ')
+    : 'ukjent';
+  const ktx = typeof treningskontekst !== 'undefined' ? treningskontekst : '';
+  const prinsipper = (typeof planPrinsipper !== 'undefined' ? planPrinsipper : '') || localStorage.getItem('fase_prinsipper') || '';
+  const injCtx = getInjuryContext();
+  const facCtx = getFacilityContext();
+  const sportsCtx = getSportsContext();
+  const hr = typeof MAX_HR !== 'undefined' ? MAX_HR : '?';
+  const lines = [`Du er en personlig treningscoach. Maks HR: ${hr} bpm.`, `HR-soner: ${zStr}.`];
+  if (injCtx) lines.push(injCtx);
+  if (facCtx) lines.push(facCtx);
+  if (sportsCtx) lines.push(sportsCtx);
+  if (ktx) lines.push(`\nUtøverprofil:\n${ktx}`);
+  if (prinsipper) lines.push(`\nFase-prinsipper:\n${prinsipper}`);
+  return lines.join('\n');
+}
+
+function buildOktContext(okt, ov = {}) {
+  const hr      = ov.hrAvg    || okt.faktiskSnittHR || '?';
+  const hrMax   = ov.hrMax    || okt.faktiskMaksHR  || '?';
+  const varighet = ov.varighet || okt.varighet       || '?';
+  const pace    = ov.pace     || okt.pace            || '?';
+  const notater = ov.vurdering || okt.vurdering      || '';
+  return `Økt: ${okt.navn}\nDato: ${okt.dato||'ukjent'} | Type: ${okt.type||'—'}\nSnitt-HR: ${hr} | Maks-HR: ${hrMax}\nVarighet: ${varighet} min | Pace: ${pace}\nPlanlagt puls: ${okt.planlagtPuls||'—'}${notater?'\nNotater: '+notater:''}`;
+}
+
+// ── Toast notifications ───────────────────────────────────────────────────────
+function showToast(msg, type='info', ms=3500) {
+  const container = document.getElementById('toast');
+  if (!container) { console.warn(msg); return; }
+  const el = document.createElement('div');
+  el.className = `toast-msg toast-${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  requestAnimationFrame(() => { el.classList.add('show'); });
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 250);
+  }, ms);
+}
+
 async function saveInjurySettings() {
   const url = getWorkerUrl(); if (!url) return;
   const statusEl = document.getElementById('injury-save-status');
@@ -1219,7 +1269,7 @@ async function testWorker(){
 // ── Strava sync ───────────────────────────────────────────────────────────────
 async function syncStrava(){
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL under Innstillinger');showView('innstillinger');return;}
+  if(!url){showToast('Sett Worker URL under Innstillinger','err');showView('innstillinger');return;}
   const btns=['sync-btn','sb-sync-btn'];
   btns.forEach(id=>{const el=document.getElementById(id);if(el){el.disabled=true;el.innerHTML='<span class="spinner"></span> Synker…';}});
   const resultEl=document.getElementById('sync-result');
@@ -1261,18 +1311,7 @@ async function autoAnalyseIdagOkt(){
   aiBox.className='analysis-box loading';
   aiBox.textContent='Claude analyserer dagens økt…';
 
-  const prinsipper=localStorage.getItem('fase_prinsipper')||'';
-  const zoneStr=(typeof ZONES!=='undefined'&&ZONES.length)?ZONES.map(z=>`${z.n}: ${z.min===0?'<'+z.max:z.max===999?z.min+'+':z.min+'–'+z.max}`).join(' | '):'';
-  const kontekst=typeof treningskontekst!=='undefined'?treningskontekst:'';
-  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.
-HR-soner: ${zoneStr||'ukjent'}.${kontekst?'\n\nUtøverprofil:\n'+kontekst:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
-
-Dagens økt: ${okt.navn}
-Sport: ${okt.sport||okt.type||'—'} | Type: ${okt.type||'—'}
-Snitt-HR: ${okt.faktiskSnittHR||'—'} | Maks-HR: ${okt.faktiskMaksHR||'—'}
-Varighet: ${okt.varighet||'—'} min | Pace: ${okt.pace||'—'}
-
-Gi en kort treneranalyse på norsk (3–4 setninger). Er intensiteten riktig for fasen? Hva var bra? Hva justeres til neste gang?`;
+  const prompt=buildCoachContext()+'\n\n'+buildOktContext(okt)+'\n\nGi en kort treneranalyse på norsk (3–4 setninger). Er intensiteten riktig for fasen? Hva var bra? Hva justeres til neste gang?';
 
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -1427,13 +1466,7 @@ async function analyseOkt(){
   const varighet=document.getElementById('f-varighet').value;
   const pace=document.getElementById('f-pace').value;
   const vurdering=document.getElementById('f-vurdering').value;
-  const _zoneStr=(typeof ZONES!=='undefined'&&ZONES.length)?ZONES.map(z=>`${z.n}: ${z.min===0?'<'+z.max:z.max===999?z.min+'+':z.min+'–'+z.max}`).join(' | '):'ukjent';
-  const _kontekst=typeof treningskontekst!=='undefined'?treningskontekst:'';
-  const _prinsipper=localStorage.getItem('fase_prinsipper')||'';
-  const _sportsCtx=getSportsContext();
-  const _injCtx=getInjuryContext();
-  const _facCtx=getFacilityContext();
-  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.\nHR-soner: ${_zoneStr}.${_injCtx?'\n'+_injCtx:''}${_facCtx?'\n'+_facCtx:''}${_sportsCtx?'\n'+_sportsCtx:''}${_kontekst?'\n\nUtøverprofil:\n'+_kontekst:''}${_prinsipper?'\n\nFase-prinsipper:\n'+_prinsipper:''}\n\nØkt: ${currentOkt.navn}\nDato: ${currentOkt.dato||'ukjent'} | Type: ${currentOkt.type}\nSnitt-HR: ${hrAvg||currentOkt.faktiskSnittHR||'ukjent'} | Maks-HR: ${hrMax||currentOkt.faktiskMaksHR||'ukjent'}\nVarighet: ${varighet||currentOkt.varighet||'ukjent'} min | Pace: ${pace||currentOkt.pace||'ukjent'}\nPlanlagt puls: ${currentOkt.planlagtPuls||'—'}\nNotater: ${vurdering||currentOkt.vurdering||'ingen'}\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.`;
+  const prompt=buildCoachContext()+'\n\n'+buildOktContext(currentOkt,{hrAvg,hrMax,varighet,pace,vurdering})+'\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.';
   const section=document.getElementById('dp-analysis-section');
   const box=document.getElementById('dp-analysis-text');
   section.style.display='block';
@@ -1455,7 +1488,7 @@ async function analyseOkt(){
 async function saveToNotion(){
   if(!currentOkt)return;
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL under Innstillinger');showView('innstillinger');return;}
+  if(!url){showToast('Sett Worker URL under Innstillinger','err');showView('innstillinger');return;}
   const statusEl=document.getElementById('dp-notion-status');
   const dot=document.getElementById('dp-notion-dot');
   const lbl=document.getElementById('dp-notion-lbl');
@@ -1505,8 +1538,6 @@ async function runAnalyse(){
   const acl=computeACL();
   const weekKm=computeWeeklyKm();
   const goalsCtx=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=getTodayDate()).sort((a,b)=>a.dato.localeCompare(b.dato)).map(g=>`${g.dato}: ${g.navn}${g.planlagtPuls?' (mål: '+g.planlagtPuls+')':''}`).join('\n');
-  const kontekstFull=treningskontekst||localStorage.getItem('treningskontekst')||'';
-  const prinsipper=localStorage.getItem('fase_prinsipper')||'';
   const helseHistorikk=allHelse.slice(0,7).map(h=>{
     const parts=[];
     if(h.sovnTimer!=null)parts.push(`${h.sovnTimer}t søvn${h.sovnKvalitet?['','(dårlig)','(ok)','(bra)'][h.sovnKvalitet]:''}`);
@@ -1514,11 +1545,7 @@ async function runAnalyse(){
     if(h.energi!=null)parts.push(`energi ${h.energi}/5`);
     return`${h.dato}: ${parts.join(', ')||'—'}`;
   }).join('\n');
-  const _injCtxA=getInjuryContext();
-  const _facCtxA=getFacilityContext();
-  const context=`Du er treneren til Arnar. Maks HR: ${MAX_HR} bpm. I dag: ${getTodayDate()}.
-${_injCtxA?_injCtxA+'\n':''}${_facCtxA?_facCtxA+'\n':''}${kontekstFull?'Profil: '+kontekstFull:''}
-${prinsipper?'Fase-prinsipper: '+prinsipper:''}
+  const context=buildCoachContext()+`\nI dag: ${getTodayDate()}.
 ${acl!==null?'Akutt:Kronisk belastning: '+acl.toFixed(2):''}
 ${weekKm?'Km denne uka: '+weekKm.toFixed(1)+'km':''}
 ${goalsCtx?'Kommende løp:\n'+goalsCtx:''}
@@ -1544,7 +1571,7 @@ Svar norsk, konkret, direkte.`;
 
 async function saveAnalyseToNotion(){
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL');showView('innstillinger');return;}
+  if(!url){showToast('Sett Worker URL','err');showView('innstillinger');return;}
   const statusEl=document.getElementById('analyse-notion-status');
   const dot=document.getElementById('analyse-notion-dot');
   const lbl=document.getElementById('analyse-notion-lbl');
@@ -1889,10 +1916,7 @@ async function autoLoadTodayBrief(okt){
   aiBox.className='analysis-box loading';
   aiBox.textContent='Forbereder coaching-brief…';
 
-  // Dynamic profile
-  const _zStr=(typeof ZONES!=='undefined'&&ZONES.length)?ZONES.map(z=>`${z.n}: ${z.min===0?'<'+z.max:z.max===999?z.min+'+':z.min+'–'+z.max}`).join(' | '):'';
-  const _ktx=typeof treningskontekst!=='undefined'?treningskontekst:'';
-  const prinsipper=planPrinsipper||localStorage.getItem('fase_prinsipper')||'';
+  // Dynamic profile (buildCoachContext used below for the prompt header)
 
   // 7-day sleep & nutrition history (oldest first so trend reads naturally)
   const helseHistorikk=allHelse.slice(0,7).reverse().map(h=>{
@@ -1932,11 +1956,7 @@ async function autoLoadTodayBrief(okt){
     .map(g=>`${g.dato}: ${g.navn}`)
     .join('\n');
 
-  const sportsCtx=getSportsContext();
-  const injCtx=getInjuryContext();
-  const facCtx=getFacilityContext();
-  const prompt=`Du er en personlig treningscoach. Maks HR: ${typeof MAX_HR!=='undefined'?MAX_HR:'?'} bpm.
-HR-soner: ${_zStr||'ukjent'}.${injCtx?'\n'+injCtx:''}${facCtx?'\n'+facCtx:''}${sportsCtx?'\n'+sportsCtx:''}${_ktx?'\n\nUtøverprofil:\n'+_ktx:''}${prinsipper?'\n\nFase-prinsipper:\n'+prinsipper:''}
+  const prompt=buildCoachContext()+`
 
 DAGENS PLANLAGTE ØKT
 ${okt.navn} — ${okt.type||'—'}, ${okt.varighet||'?'}min${okt.planlagtPuls?', mål-HR: '+okt.planlagtPuls:''}
@@ -1974,12 +1994,12 @@ async function markAsComplete(oktId){
   const okt=allOkter.find(o=>o.id===oktId);
   if(!okt)return;
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL under Innstillinger');showView('innstillinger');return;}
+  if(!url){showToast('Sett Worker URL under Innstillinger','err');showView('innstillinger');return;}
   try{
     const r=await fetch(`${url}/api/okter/${oktId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'Gjennomført'})});
     if(r.ok){okt.status='Gjennomført';renderIdagView();}
-    else{alert('Klarte ikke oppdatere status');}
-  }catch(e){alert('Feil: '+e.message);}
+    else{showToast('Klarte ikke oppdatere status','err');}
+  }catch(e){showToast('Feil: '+e.message,'err');}
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
@@ -2102,7 +2122,7 @@ function selectDagbokCat(btn){
 
 async function logDagbok(){
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL under Innstillinger');return;}
+  if(!url){showToast('Sett Worker URL under Innstillinger','err');return;}
   const tekst=document.getElementById('dagbok-tekst').value.trim();
   if(!tekst)return;
   const smerteVal=document.getElementById('dagbok-smerte').value;
@@ -2212,7 +2232,7 @@ function selectEnergi(btn){
 }
 
 async function logHelse(){
-  const url=getWorkerUrl();if(!url){alert('Sett Worker URL under Innstillinger');return;}
+  const url=getWorkerUrl();if(!url){showToast('Sett Worker URL under Innstillinger','err');return;}
   const sovnTimer=document.getElementById('helse-sovn').value;
   const protein=document.getElementById('helse-protein').value;
   const vekt=document.getElementById('helse-vekt').value;
@@ -2363,7 +2383,7 @@ function toggleAddGoal(){
 
 async function addGoal(){
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL under Innstillinger');return;}
+  if(!url){showToast('Sett Worker URL under Innstillinger','err');return;}
   const goalType=document.getElementById('g-goaltype').value;
   const isRace=goalType==='Race';
   const navn=document.getElementById('g-navn').value.trim();
@@ -2400,7 +2420,7 @@ async function markGoalDone(id){
   try{
     const r=await fetch(`${url}/api/okter/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(r.ok){await fetchGoals();await fetchOkter();}
-  }catch(e){alert('Feil: '+e.message);}
+  }catch(e){showToast('Feil: '+e.message,'err');}
 }
 
 function updateIdagCountdowns(){
@@ -2503,7 +2523,7 @@ function toggleAddTestløp(){
 
 async function addTestløp(){
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL under Innstillinger');return;}
+  if(!url){showToast('Sett Worker URL under Innstillinger','err');return;}
   const dist=document.getElementById('tl-distanse').value;
   const dato=document.getElementById('tl-dato').value;
   const resultat=document.getElementById('tl-resultat').value.trim();
@@ -2743,7 +2763,7 @@ async function sendPlanMelding(){
   const msg=input.value.trim();
   if(!msg)return;
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL under Innstillinger');showView('innstillinger');return;}
+  if(!url){showToast('Sett Worker URL under Innstillinger','err');showView('innstillinger');return;}
 
   input.value='';
   renderPlanBubble('user',msg);
@@ -2787,8 +2807,6 @@ async function sendPlanMelding(){
 
   const planSumLines=planSummaries.map(p=>`[${p.dato||'?'}] ${(p.vurdering||'').slice(0,200)}`).join('\n\n');
 
-  const prinsipper=planPrinsipper||localStorage.getItem('fase_prinsipper')||'';
-
   // Goals context
   const goalsCtx=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=today)
     .sort((a,b)=>a.dato.localeCompare(b.dato))
@@ -2797,8 +2815,6 @@ async function sendPlanMelding(){
   const pastGoalsCtx=allGoals.filter(g=>g.status==='Gjennomført')
     .map(g=>`${g.dato}: ${g.navn}${g.planlagtPuls?' — Resultat: '+g.planlagtPuls:''}`)
     .join('\n');
-  const kontekstFull=treningskontekst||localStorage.getItem('treningskontekst')||'';
-
   const dagbokCtx=recentDagbok.map(e=>`${e.dato}: [${e.navn.split(':')[0]}] ${e.vurdering||e.navn}${e.smerte!=null?' (smerte: '+e.smerte+'/10)':''}`).join('\n');
 
   // Test race results — latest per distance
@@ -2808,13 +2824,8 @@ async function sendPlanMelding(){
   });
   const testCtx=Object.entries(testByDist).map(([dist,o])=>`${dist}: ${o.pace}${o.faktiskSnittHR?' (HR '+o.faktiskSnittHR+')':''} — ${o.dato}`).join('\n');
 
-  const _injCtxPlan=getInjuryContext();
-  const _facCtxPlan=getFacilityContext();
-  const systemCtx=`Du er personlig trener til Arnar. Maks HR: ${MAX_HR} bpm.
-Soner: S1 <120 | S2 120–145 | S3 146–162 | S4 163–178 | S5 179–199.
+  const systemCtx=buildCoachContext()+`
 I dag: ${today}. Fase: ${faseNavn}.
-${_injCtxPlan?_injCtxPlan+'\n':''}${_facCtxPlan?_facCtxPlan+'\n':''}${kontekstFull?`TRENINGSKONTEKST:\n${kontekstFull}\n`:''}
-${prinsipper?`Fase-prinsipper:\n${prinsipper}\n`:''}
 KOMMENDE LØP:
 ${goalsCtx||'Ingen registrerte mål'}
 ${pastGoalsCtx?`\nTIDLIGERE LØP:\n${pastGoalsCtx}`:''}
@@ -2912,7 +2923,7 @@ function renderPlanPreview(sessions){
 async function createPlanSessions(sessions){
   if(!sessions||!sessions.length)return;
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL');showView('innstillinger');return;}
+  if(!url){showToast('Sett Worker URL','err');showView('innstillinger');return;}
   const btn=document.getElementById('plan-create-btn');
   if(btn){btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Oppretter…';}
   try{
@@ -2940,7 +2951,7 @@ function clearPlanChat(){
 async function savePlanToNotion(){
   if(!lastPlanResponse)return;
   const url=getWorkerUrl();
-  if(!url){alert('Sett Worker URL');showView('innstillinger');return;}
+  if(!url){showToast('Sett Worker URL','err');showView('innstillinger');return;}
   const btn=document.getElementById('plan-save-btn');
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
   const today=getTodayDate();
@@ -3003,5 +3014,6 @@ if('serviceWorker' in navigator){
   });
 }
 </script>
+<div id="toast"></div>
 </body>
 </html>

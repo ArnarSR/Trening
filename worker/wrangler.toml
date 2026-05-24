@@ -2,6 +2,10 @@ name = "trening-arnar"
 main = "index.js"
 compatibility_date = "2024-01-01"
 
+[vars]
+DB_ID = "953ee9299ea345fb8a3d77cf8237116a"
+HELSE_DB_ID = "2e5c1e0abf4e4fd69c4c88ae89c32d5f"
+
 [[kv_namespaces]]
 binding = "SETTINGS"
 id = "8118722ea98048a2893559e06d021c74"

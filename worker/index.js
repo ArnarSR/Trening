@@ -455,14 +455,18 @@ async function syncStrava(env) {
   // Query Notion for all pages since oldest activity date
   const notionPages = await queryNotionSince(env, oldest);
 
-  // Build both stravaId map (primary) and date map (fallback for manually-created pages)
+  // Build stravaId map (primary) and date+sport map (fallback — avoids cross-sport false matches)
   const stravaMap = {};
-  const dateMap = {};
+  const dateSportMap = {};
   for (const page of notionPages) {
     const sid = page.properties['Strava ID']?.rich_text?.[0]?.plain_text;
     if (sid && !stravaMap[sid]) stravaMap[sid] = page;
     const dato = page.properties['Dato']?.date?.start;
-    if (dato && !dateMap[dato]) dateMap[dato] = page;
+    const sportName = page.properties['Sport']?.select?.name;
+    if (dato && sportName) {
+      const key = `${dato}_${sportName}`;
+      if (!dateSportMap[key]) dateSportMap[key] = page;
+    }
   }
 
   let synced = 0, created = 0, errors = 0;
@@ -483,8 +487,9 @@ async function syncStrava(env) {
     const pace = activity.average_speed > 0 ? formatPace(activity.average_speed) : null;
     const name = activity.name || 'Strava-økt';
 
-    // Match by Strava ID first (exact dedup), fall back to date (catches manually-created sessions)
-    const existing = stravaMap[stravaId] || dateMap[date];
+    // Match by Strava ID first (exact dedup), fall back to date+sport (catches manually-created sessions)
+    const dateSportKey = sport ? `${date}_${sport.type}` : null;
+    const existing = stravaMap[stravaId] || (dateSportKey && dateSportMap[dateSportKey]);
 
     console.log(JSON.stringify({
       ts: new Date().toISOString(), event: 'sync_activity',
@@ -514,9 +519,9 @@ async function syncStrava(env) {
         errors++;
         continue;
       }
-      // Register by stravaId so two-a-days don't collide via dateMap
+      // Register by stravaId so two-a-days don't collide via dateSportMap
       stravaMap[stravaId] = existing;
-      delete dateMap[date]; // prevent a two-a-day from date-matching the same page
+      if (dateSportKey) delete dateSportMap[dateSportKey];
       synced++;
     } else {
       const props = {

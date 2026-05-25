@@ -316,6 +316,11 @@ export default {
         return syncStrava(env);
       }
 
+      // POST /api/sync-latest — fetch only the most recent Strava activity
+      if (path === '/api/sync-latest' && request.method === 'POST') {
+        return syncLatestStrava(env);
+      }
+
       // GET /api/debug/last-activity
       if (path === '/api/debug/last-activity' && request.method === 'GET') {
         return debugLastActivity(env);
@@ -547,6 +552,98 @@ async function syncStrava(env) {
 
   if (synced + created > 0) await env.SETTINGS.delete('okter_cache');
   return json({ synced, created, errors, total: activities.length, capped: synced + created + errors >= MAX_WRITES });
+}
+
+async function syncLatestStrava(env) {
+  const form = new FormData();
+  form.append('client_id', env.STRAVA_CLIENT_ID.trim());
+  form.append('client_secret', env.STRAVA_CLIENT_SECRET.trim());
+  form.append('refresh_token', env.STRAVA_REFRESH_TOKEN.trim());
+  form.append('grant_type', 'refresh_token');
+  const tokenRes = await fetch('https://www.strava.com/oauth/token', { method: 'POST', body: form });
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) return json({ error: 'Strava token feil', detail: tokenData }, 500);
+
+  const actRes = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=1', {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+  const activities = await actRes.json();
+  if (!Array.isArray(activities) || !activities.length) {
+    return json({ alreadyExists: false, synced: 0, created: 0, total: 0 });
+  }
+
+  const activity = activities[0];
+  const stravaId = String(activity.id);
+  const date = activity.start_date_local?.split('T')[0];
+  if (!date) return json({ alreadyExists: false, synced: 0, created: 0, total: 1 });
+
+  const notionPages = await queryNotionSince(env, date);
+
+  const stravaMap = {};
+  const dateSportMap = {};
+  for (const page of notionPages) {
+    const sid = page.properties['Strava ID']?.rich_text?.[0]?.plain_text;
+    if (sid && !stravaMap[sid]) stravaMap[sid] = page;
+    const dato = page.properties['Dato']?.date?.start;
+    const sportName = page.properties['Sport']?.select?.name;
+    if (dato && sportName) {
+      const key = `${dato}_${sportName}`;
+      if (!dateSportMap[key]) dateSportMap[key] = page;
+    }
+  }
+
+  if (stravaMap[stravaId]) {
+    return json({ alreadyExists: true, synced: 0, created: 0, total: 1 });
+  }
+
+  const sportKey = (activity.sport_type || activity.type || '').toLowerCase();
+  const sport = SPORT_MAP[sportKey];
+  const avgHR = activity.average_heartrate ? Math.round(activity.average_heartrate) : null;
+  const maxHR = activity.max_heartrate ? Math.round(activity.max_heartrate) : null;
+  const duration = activity.elapsed_time ? Math.round(activity.elapsed_time / 60) : null;
+  const distance = activity.distance ? Math.round(activity.distance / 100) / 10 : null;
+  const pace = activity.average_speed > 0 ? formatPace(activity.average_speed) : null;
+  const calories = activity.calories ? Math.round(activity.calories) : null;
+  const name = activity.name || 'Strava-økt';
+
+  const dateSportKey = sport ? `${date}_${sport.type}` : null;
+  const existing = dateSportKey && dateSportMap[dateSportKey];
+
+  if (existing) {
+    const props = { 'Status': { select: { name: 'Gjennomført' } } };
+    if (avgHR !== null)    props['Faktisk snitt HR'] = { number: avgHR };
+    if (maxHR !== null)    props['Faktisk maks HR']  = { number: maxHR };
+    if (duration !== null) props['Varighet (min)']   = { number: duration };
+    if (distance !== null) props['Distanse (km)']    = { number: distance };
+    if (pace)              props['Pace']              = { rich_text: [{ text: { content: pace } }] };
+    if (sport)             props['Sport']             = { select: { name: sport.type } };
+    if (calories !== null) props['Kalorier']          = { number: calories };
+    props['Strava ID'] = { rich_text: [{ text: { content: stravaId } }] };
+    const patchBody = { properties: props };
+    if (sport) patchBody.icon = { type: 'emoji', emoji: sport.icon };
+    await notionRequest(env, 'PATCH', `/pages/${existing.id}`, patchBody);
+    await env.SETTINGS.delete('okter_cache');
+    return json({ alreadyExists: false, synced: 1, created: 0, total: 1 });
+  }
+
+  const props = {
+    'Navn':      { title: [{ text: { content: name } }] },
+    'Dato':      { date: { start: date } },
+    'Status':    { select: { name: 'Gjennomført' } },
+    'Strava ID': { rich_text: [{ text: { content: stravaId } }] },
+  };
+  if (avgHR !== null)    props['Faktisk snitt HR'] = { number: avgHR };
+  if (maxHR !== null)    props['Faktisk maks HR']  = { number: maxHR };
+  if (duration !== null) props['Varighet (min)']   = { number: duration };
+  if (distance !== null) props['Distanse (km)']    = { number: distance };
+  if (pace)              props['Pace']              = { rich_text: [{ text: { content: pace } }] };
+  if (sport)             props['Sport']             = { select: { name: sport.type } };
+  if (calories !== null) props['Kalorier']          = { number: calories };
+  const createBody = { parent: { database_id: env.DB_ID }, properties: props };
+  if (sport) createBody.icon = { type: 'emoji', emoji: sport.icon };
+  await notionRequest(env, 'POST', '/pages', createBody);
+  await env.SETTINGS.delete('okter_cache');
+  return json({ alreadyExists: false, synced: 0, created: 1, total: 1 });
 }
 
 async function debugLastActivity(env) {

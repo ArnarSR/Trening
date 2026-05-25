@@ -1534,7 +1534,6 @@ async function syncLatestStrava(){
       }else if(d.created>0||d.synced>0){
         if(statusEl){statusEl.textContent='✓ Økt synket';statusEl.style.color='var(--accent)';}
         await fetchOkter();
-        renderIdagView();
         await autoAnalyseIdagOkt();
       }else{
         if(statusEl){statusEl.textContent='Ingen aktivitet funnet';statusEl.style.color='var(--text3)';}
@@ -2151,9 +2150,9 @@ function renderIdagView(){
   if(todayOkt){
     dailySection.innerHTML=renderIdagOktRow(todayOkt,true);
     if(todayOkt.status==='Gjennomført'){
-      // Show saved analysis for completed sessions
+      // Show saved analysis for completed sessions — always overwrite stale content
       if(todayOkt.vurdering&&todayOkt.vurdering.length>20){
-        if(aiSec&&!aiBox.textContent){
+        if(aiSec){
           aiSec.style.display='block';
           aiBox.className='analysis-box';
           aiBox.textContent=todayOkt.vurdering;

@@ -609,6 +609,17 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     <div class="page-sub" id="plan-cal-status">Diskuter og bygg planen din med Claude</div>
   </div>
 
+  <!-- Coach assessment for upcoming sessions -->
+  <div id="plan-coach-card" style="margin-bottom:14px;display:none;">
+    <div style="background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:var(--rlg);padding:14px 16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:10px;font-family:var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.07em;">Trenerassessment</div>
+        <button onclick="refreshPlanAssessment()" id="plan-assess-refresh" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;">⟳</button>
+      </div>
+      <div id="plan-coach-text" style="font-size:13px;line-height:1.65;color:var(--text2);white-space:pre-wrap;"></div>
+    </div>
+  </div>
+
   <!-- Current plan summary -->
   <div id="plan-current" style="margin-bottom:14px;display:none;">
     <div class="sec-head" style="margin-bottom:8px;">
@@ -3117,6 +3128,16 @@ function togglePlanWeek(id){
   if(el) el.classList.toggle('collapsed');
 }
 
+function togglePlanSubsec(name){
+  const body=document.getElementById('subsec-body-'+name);
+  const hdr=body?.previousElementSibling;
+  if(!body)return;
+  const isCollapsed=body.classList.contains('collapsed');
+  body.classList.toggle('collapsed',!isCollapsed);
+  if(hdr)hdr.classList.toggle('closed',!isCollapsed);
+  localStorage.setItem('plan_'+name+'_open', isCollapsed?'true':'false');
+}
+
 function showPlanEmpty(){
   const chat=document.getElementById('plan-chat');
   if(!chat.querySelector('.plan-empty')){
@@ -3204,7 +3225,7 @@ function renderCurrentPlan(){
 
   // ── Historikk (completed sessions) ────────────────────────────────────────
   {
-    const histOpen = localStorage.getItem('plan_historikk_open') !== 'false';
+    const histOpen = localStorage.getItem('plan_historikk_open') === 'true'; // default closed
     const histHdr = histOpen ? '' : ' closed';
     const histBody = histOpen ? '' : ' collapsed';
     let histHtml = `<div class="plan-subsec-card">
@@ -3364,6 +3385,81 @@ function togglePlanCurrent(){
   }
 }
 
+async function loadPlanAssessment(force){
+  const url=getWorkerUrl();
+  if(!url)return;
+  const card=document.getElementById('plan-coach-card');
+  const textEl=document.getElementById('plan-coach-text');
+  const today=getTodayDate();
+  const cacheKey='plan_assessment_'+today;
+
+  if(!force){
+    const cached=sessionStorage.getItem(cacheKey);
+    if(cached){
+      textEl.textContent=cached;
+      card.style.display='block';
+      return;
+    }
+  }
+
+  card.style.display='block';
+  textEl.textContent='Analyserer kommende øktplan…';
+
+  const planned=allOkter
+    .filter(o=>o.status==='To Do'&&o.dato>=today&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .sort((a,b)=>a.dato.localeCompare(b.dato))
+    .slice(0,15);
+  if(!planned.length){card.style.display='none';return;}
+
+  const recent=allOkter
+    .filter(o=>o.status==='Gjennomført'&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .sort((a,b)=>b.dato.localeCompare(a.dato))
+    .slice(0,7);
+
+  const acl=computeACL();
+  const faseNavn=localStorage.getItem('fase_navn')||'Fase 0';
+  const goals=allGoals.filter(g=>g.dato>=today).sort((a,b)=>a.dato.localeCompare(b.dato)).slice(0,3);
+
+  const planLines=planned.map(o=>`${o.dato}: ${o.navn} — ${o.type||'?'}${o.varighet?' ('+o.varighet+' min)':''}${o.planlagtPuls?' HR: '+o.planlagtPuls:''}`).join('\n');
+  const recentLines=recent.map(o=>`${o.dato}: ${o.sport||o.type} ${o.varighet?o.varighet+'min':''} HR ${o.faktiskSnittHR||'?'}`).join('\n');
+  const goalLines=goals.map(g=>`${g.dato}: ${g.navn}`).join('\n');
+
+  const prompt=`Du er en løpetrener. Gi en kortfattet vurdering (3–5 setninger) av den kommende treningsplanen med tanke på progresjon, belastning og mål. Vær konkret og praktisk.
+
+Fase: ${faseNavn}
+Akutt:kronisk belastning: ${acl!==null?acl.toFixed(2):'ukjent'}
+
+Kommende øktplan:
+${planLines}
+
+Siste 7 gjennomførte:
+${recentLines||'Ingen'}
+
+Mål:
+${goalLines||'Ingen registrert'}
+
+Gi vurderingen direkte uten introduksjon. Fokuser på om planen er fornuftig gitt belastning og mål, og om det er noe som bør justeres.`;
+
+  try{
+    const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    const d=await r.json();
+    const text=d.text||'Ingen respons.';
+    textEl.textContent=text;
+    sessionStorage.setItem(cacheKey,text);
+  }catch(e){
+    textEl.textContent='Kunne ikke laste vurdering.';
+  }
+}
+
+async function refreshPlanAssessment(){
+  const btn=document.getElementById('plan-assess-refresh');
+  if(btn){btn.style.opacity='0.4';btn.style.pointerEvents='none';}
+  const today=getTodayDate();
+  sessionStorage.removeItem('plan_assessment_'+today);
+  await loadPlanAssessment(true);
+  if(btn){btn.style.opacity='';btn.style.pointerEvents='';}
+}
+
 // Called when switching to Plan view
 async function loadPlanContext(){
   const url=getWorkerUrl();
@@ -3391,6 +3487,8 @@ async function loadPlanContext(){
   }catch(e){planPrinsipper=localStorage.getItem('fase_prinsipper')||'';}
   // Render current plan (uses allOkter — no extra fetch needed)
   renderCurrentPlan();
+  // Load coach assessment (cached per day)
+  loadPlanAssessment(false);
 }
 
 function computeWeeklyVolume(){

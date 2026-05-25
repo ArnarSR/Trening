@@ -99,20 +99,47 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 /* ── Session bottom sheet ─────────────────────────────────────────────── */
 .ss-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;display:none;animation:fadeIn .18s ease;}
 .ss-backdrop.open{display:block;}
-.session-sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:var(--bg2);border-radius:18px 18px 0 0;padding:12px 18px 36px;z-index:901;transform:translateY(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);max-height:88vh;overflow-y:auto;}
+.session-sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:var(--bg2);border-radius:18px 18px 0 0;padding:12px 18px 36px;z-index:901;transform:translateY(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);max-height:90vh;overflow-y:auto;}
 .session-sheet.open{transform:translateY(0);}
 .ss-handle{width:36px;height:4px;background:var(--border-hi);border-radius:2px;margin:0 auto 16px;}
 .ss-title{font-size:19px;font-weight:700;color:var(--text1);margin-bottom:3px;line-height:1.25;}
 .ss-meta{font-size:12px;color:var(--text3);font-family:var(--mono);margin-bottom:14px;}
 .ss-badge{display:inline-block;background:rgba(200,240,96,0.10);border:0.5px solid rgba(200,240,96,0.2);border-radius:6px;padding:3px 9px;font-size:11px;color:var(--accent);font-family:var(--mono);margin:0 5px 6px 0;}
 .ss-badge.done{background:rgba(255,255,255,0.05);border-color:var(--border);color:var(--text2);}
-.ss-section{font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 7px;}
+.ss-section{font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 7px;display:flex;justify-content:space-between;align-items:center;}
 .ss-instr{font-size:13px;line-height:1.75;color:var(--text2);white-space:pre-wrap;background:var(--bg3);border-radius:10px;padding:12px 14px;}
 .ss-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;}
 .ss-stat{background:var(--bg3);border-radius:10px;padding:10px 12px;}
 .ss-stat-lbl{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;}
 .ss-stat-val{font-size:17px;font-weight:700;color:var(--text1);margin-top:2px;}
 .ss-actions{display:flex;gap:10px;margin-top:20px;}
+/* ── Workout tracker ──────────────────────────────────────────────────── */
+.wt-progress{background:var(--bg3);border-radius:8px;height:5px;margin:4px 0 14px;overflow:hidden;}
+.wt-progress-fill{height:100%;background:var(--accent);border-radius:8px;transition:width .3s ease;}
+.wt-count{font-size:11px;color:var(--accent);font-family:var(--mono);letter-spacing:0;text-transform:none;}
+.wt-prev-item{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--border);}
+.wt-prev-item:last-child{border-bottom:none;}
+.wt-prev-name{font-size:13px;color:var(--text1);}
+.wt-prev-note{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:1px;}
+.wt-prev-plan{font-size:12px;color:var(--accent);font-family:var(--mono);flex-shrink:0;margin-left:10px;}
+.wt-ex{margin-bottom:14px;}
+.wt-ex-title{font-size:15px;font-weight:600;color:var(--text1);margin-bottom:2px;}
+.wt-ex-note{font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:8px;}
+.wt-sep{height:0.5px;background:var(--border);margin:10px 0 16px;}
+.wt-set-row{display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:0.5px solid rgba(255,255,255,0.06);}
+.wt-set-row:last-child{border-bottom:none;}
+.wt-set-row.done .wt-num,.wt-set-row.done .wt-inp,.wt-set-row.done .wt-unit{opacity:.4;}
+.wt-num{font-size:11px;font-family:var(--mono);color:var(--text3);width:36px;flex-shrink:0;}
+.wt-inp{background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:8px;color:var(--text1);font-size:16px;font-family:var(--mono);font-weight:600;padding:7px 4px;text-align:center;-webkit-appearance:none;-moz-appearance:textfield;}
+.wt-inp:focus{outline:none;border-color:var(--accent);}
+.wt-inp::placeholder{color:var(--text3);font-weight:400;font-size:13px;}
+.wt-inp::-webkit-inner-spin-button,.wt-inp::-webkit-outer-spin-button{-webkit-appearance:none;}
+.wt-inp-r{width:52px;}
+.wt-inp-k{width:60px;}
+.wt-unit{font-size:10px;color:var(--text3);font-family:var(--mono);flex-shrink:0;margin-left:-4px;}
+.wt-spacer{flex:1;}
+.wt-chk{width:42px;height:42px;border-radius:11px;border:0.5px solid var(--border-hi);background:var(--bg3);color:var(--text3);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;-webkit-tap-highlight-color:transparent;line-height:1;}
+.wt-chk.done{background:rgba(200,240,96,0.18);border-color:var(--accent);color:var(--accent);}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .detail-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;}
 .detail-title{font-size:15px;font-weight:600;}
@@ -246,6 +273,17 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 .toast-info{background:var(--bg2);border:1px solid var(--border-hi);color:var(--text1);}
 .toast-ok{background:rgba(139,255,200,0.15);border:1px solid var(--accent2);color:var(--accent2);}
 .toast-err{background:rgba(255,99,99,0.15);border:1px solid var(--danger);color:var(--danger);}
+.plan-subsec-card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);overflow:hidden;margin-bottom:8px;}
+.plan-subsec-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;border-bottom:0.5px solid var(--border);}
+.plan-subsec-hdr.closed{border-bottom:none;}
+.plan-subsec-hdr:active{background:var(--bg3);}
+.plan-subsec-info{display:flex;align-items:center;gap:8px;}
+.plan-subsec-title{font-size:10px;font-weight:500;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;}
+.plan-subsec-count{font-size:10px;font-family:var(--mono);color:var(--text3);opacity:.6;}
+.plan-subsec-chevron{font-size:13px;color:var(--text3);display:inline-block;transition:transform .2s;}
+.plan-subsec-hdr.closed .plan-subsec-chevron{transform:rotate(-90deg);}
+.plan-subsec-body{overflow:hidden;max-height:4000px;transition:max-height .3s ease,opacity .2s ease;opacity:1;}
+.plan-subsec-body.collapsed{max-height:0!important;opacity:0;}
 </style>
 </head>
 <body>
@@ -1644,11 +1682,106 @@ function closeDetail(){
 // ── Session bottom sheet (plan calendar + idag) ───────────────────────────────
 let sheetOkt = null;
 
+// ── Workout tracker state ─────────────────────────────────────────────────────
+let workoutLogs = {};       // 'ei_si' → {reps, kg, done}
+let workoutExercises = null;
+let workoutSessionOkt = null;
+
+function parseExercises(vurdering) {
+  if (!vurdering) return null;
+  try {
+    const match = vurdering.match(/\{[\s\S]*?"exercises"[\s\S]*?\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed.exercises) && parsed.exercises.length) return parsed.exercises;
+    }
+  } catch(e) {}
+  return null;
+}
+
+function _wtTotalSets(exs) { return exs.reduce((a, ex) => a + (ex.sett || 0), 0); }
+function _wtDoneSets()     { return Object.values(workoutLogs).filter(l => l.done).length; }
+
+function updateWtProgress() {
+  if (!workoutExercises) return;
+  const total = _wtTotalSets(workoutExercises);
+  const done  = _wtDoneSets();
+  const pct   = total > 0 ? Math.round(done / total * 100) : 0;
+  const fill  = document.querySelector('.wt-progress-fill');
+  const count = document.querySelector('.wt-count');
+  if (fill)  fill.style.width = pct + '%';
+  if (count) count.textContent = `${done}/${total} sett`;
+}
+
+function wtLog(ei, si, field, val) {
+  const key = `${ei}_${si}`;
+  if (!workoutLogs[key]) workoutLogs[key] = {};
+  workoutLogs[key][field] = val === '' ? null : parseFloat(val);
+}
+
+function wtCheck(ei, si) {
+  const key = `${ei}_${si}`;
+  if (!workoutLogs[key]) workoutLogs[key] = {};
+  // Capture current input values before toggling
+  const rEl = document.getElementById(`wt-r-${ei}-${si}`);
+  const kEl = document.getElementById(`wt-k-${ei}-${si}`);
+  if (rEl?.value) workoutLogs[key].reps = parseFloat(rEl.value);
+  if (kEl?.value) workoutLogs[key].kg   = parseFloat(kEl.value);
+  workoutLogs[key].done = !workoutLogs[key].done;
+  // Update row and button visually
+  const row = document.getElementById(`wt-row-${ei}-${si}`);
+  const btn = document.getElementById(`wt-chk-${ei}-${si}`);
+  if (row) row.classList.toggle('done', workoutLogs[key].done);
+  if (btn) btn.classList.toggle('done', workoutLogs[key].done);
+  updateWtProgress();
+}
+
+function _renderWorkoutPreview(exercises) {
+  return exercises.map((ex, ei) => {
+    const plan = `${ex.sett}×${ex.reps}${ex.vekt != null ? ' @ ' + ex.vekt + 'kg' : ''}`;
+    return `<div class="wt-prev-item">
+      <div><div class="wt-prev-name">${esc(ex.navn)}</div>${ex.merknad ? `<div class="wt-prev-note">${esc(ex.merknad)}</div>` : ''}</div>
+      <div class="wt-prev-plan">${plan}</div>
+    </div>`;
+  }).join('');
+}
+
+function _renderWorkoutActive(exercises) {
+  const total = _wtTotalSets(exercises);
+  const done  = _wtDoneSets();
+  let html = `<div class="wt-progress"><div class="wt-progress-fill" style="width:${total>0?Math.round(done/total*100):0}%"></div></div>`;
+  exercises.forEach((ex, ei) => {
+    html += `<div class="wt-ex">
+      <div class="wt-ex-title">${esc(ex.navn)}</div>
+      ${ex.merknad ? `<div class="wt-ex-note">${esc(ex.merknad)}</div>` : ''}`;
+    for (let si = 0; si < ex.sett; si++) {
+      const log   = workoutLogs[`${ei}_${si}`] || {};
+      const isDone = !!log.done;
+      html += `<div class="wt-set-row${isDone ? ' done' : ''}" id="wt-row-${ei}-${si}">
+        <span class="wt-num">Sett ${si + 1}</span>
+        <input class="wt-inp wt-inp-r" type="number" id="wt-r-${ei}-${si}"
+          placeholder="${ex.reps}" value="${log.reps != null ? log.reps : ''}"
+          inputmode="numeric" oninput="wtLog(${ei},${si},'reps',this.value)">
+        <input class="wt-inp wt-inp-k" type="number" id="wt-k-${ei}-${si}"
+          placeholder="${ex.vekt != null ? ex.vekt : '—'}" value="${log.kg != null ? log.kg : ''}"
+          inputmode="decimal" step="0.5" oninput="wtLog(${ei},${si},'kg',this.value)">
+        <span class="wt-unit">kg</span>
+        <div class="wt-spacer"></div>
+        <button class="wt-chk${isDone ? ' done' : ''}" id="wt-chk-${ei}-${si}"
+          onclick="wtCheck(${ei},${si})">✓</button>
+      </div>`;
+    }
+    html += `</div>`;
+    if (ei < exercises.length - 1) html += `<div class="wt-sep"></div>`;
+  });
+  return html;
+}
+
 function openSessionSheet(okt) {
   sheetOkt = okt;
   document.getElementById('ss-title').textContent = okt.navn || '—';
   const dateFmt = okt.dato ? formatDato(okt.dato) : '—';
-  const status = okt.status || 'To Do';
+  const status  = okt.status || 'To Do';
   document.getElementById('ss-meta').textContent = `${dateFmt} · ${status}`;
 
   // Badges
@@ -1659,24 +1792,36 @@ function openSessionSheet(okt) {
   if (okt.varighet)    badges.push({label: okt.varighet + ' min', done: isDone});
   if (okt.planlagtPuls && !isDone) badges.push({label: 'HR ' + okt.planlagtPuls, done: false});
   document.getElementById('ss-badges').innerHTML = badges
-    .map(b => `<span class="ss-badge${b.done?' done':''}">${esc(b.label)}</span>`).join('');
+    .map(b => `<span class="ss-badge${b.done ? ' done' : ''}">${esc(b.label)}</span>`).join('');
 
-  // Instructions / notes
-  const instrSec = document.getElementById('ss-instr-section');
+  // Detect strength/rehab with structured exercises
+  const isStrength = okt.type === 'Styrke' || okt.type === 'Rehab';
+  const exercises   = isStrength ? parseExercises(okt.vurdering) : null;
+  const isActive    = workoutSessionOkt?.id === okt.id;
+
+  const instrSec   = document.getElementById('ss-instr-section');
   const instrLabel = document.getElementById('ss-instr-label');
-  const instrEl = document.getElementById('ss-instr');
-  if (okt.vurdering && okt.vurdering.trim()) {
-    instrLabel.textContent = isDone ? 'Notater' : 'Treningsinstruksjoner';
-    instrEl.textContent = okt.vurdering.trim();
+  const instrEl    = document.getElementById('ss-instr');
+
+  if (exercises) {
     instrSec.style.display = 'block';
+    // Label row with live set counter when active
+    instrLabel.innerHTML = `<span>${isActive ? 'Aktiv økt' : 'Øvelser'}</span>${isActive ? `<span class="wt-count">${_wtDoneSets()}/${_wtTotalSets(exercises)} sett</span>` : ''}`;
+    instrEl.className = ''; // no ss-instr box-style for tracker
+    instrEl.innerHTML = isActive ? _renderWorkoutActive(exercises) : _renderWorkoutPreview(exercises);
+  } else if (okt.vurdering && okt.vurdering.trim()) {
+    instrSec.style.display = 'block';
+    instrLabel.innerHTML = `<span>${isDone ? 'Notater' : 'Treningsinstruksjoner'}</span>`;
+    instrEl.className = 'ss-instr';
+    instrEl.textContent = okt.vurdering.trim();
   } else {
     instrSec.style.display = 'none';
   }
 
-  // Stats for completed sessions
+  // Stats for completed sessions (running/cardio)
   const statsSec = document.getElementById('ss-stats-section');
-  const statsEl = document.getElementById('ss-stats');
-  if (isDone && (okt.faktiskSnittHR || okt.faktiskMaksHR || okt.pace)) {
+  const statsEl  = document.getElementById('ss-stats');
+  if (isDone && !exercises && (okt.faktiskSnittHR || okt.faktiskMaksHR || okt.pace)) {
     const stats = [];
     if (okt.faktiskSnittHR) stats.push({l:'Snitt-HR', v: okt.faktiskSnittHR + ' bpm'});
     if (okt.faktiskMaksHR)  stats.push({l:'Maks-HR',  v: okt.faktiskMaksHR  + ' bpm'});
@@ -1688,6 +1833,22 @@ function openSessionSheet(okt) {
     statsSec.style.display = 'block';
   } else {
     statsSec.style.display = 'none';
+  }
+
+  // Action buttons — context-sensitive
+  const actionsEl = document.getElementById('ss-actions');
+  if (exercises && isActive) {
+    actionsEl.innerHTML = `
+      <button class="btn" style="flex:1;" onclick="cancelWorkout()">Avbryt</button>
+      <button class="btn btn-accent" style="flex:2;" id="ss-complete-btn" onclick="completeWorkout()">Fullfør økt ✓</button>`;
+  } else if (exercises && !isDone) {
+    actionsEl.innerHTML = `
+      <button class="btn" style="flex:1;" onclick="closeSessionSheet()">Lukk</button>
+      <button class="btn btn-accent" style="flex:1;" onclick="startWorkout(sheetOkt)">Start økt →</button>`;
+  } else {
+    actionsEl.innerHTML = `
+      <button class="btn" style="flex:1;" onclick="closeSessionSheet()">Lukk</button>
+      <button class="btn btn-accent" style="flex:1;" onclick="openInOktView()">Rediger →</button>`;
   }
 
   document.getElementById('ss-backdrop').classList.add('open');
@@ -1702,19 +1863,74 @@ function closeSessionSheet() {
   sheetOkt = null;
 }
 
+function startWorkout(okt) {
+  workoutLogs      = {};
+  workoutExercises = parseExercises(okt.vurdering);
+  workoutSessionOkt = okt;
+  openSessionSheet(okt); // re-render in active mode
+}
+
+function cancelWorkout() {
+  workoutLogs = {};
+  workoutExercises = null;
+  const okt = workoutSessionOkt;
+  workoutSessionOkt = null;
+  if (okt) openSessionSheet(okt); // back to preview
+  else closeSessionSheet();
+}
+
+async function completeWorkout() {
+  if (!workoutExercises || !workoutSessionOkt) return;
+  const url = getWorkerUrl();
+  if (!url) { showToast('Sett Worker URL', 'err'); return; }
+
+  // Format log as human-readable string
+  const lines = workoutExercises.map((ex, ei) => {
+    const sets = Array.from({length: ex.sett}, (_, si) => {
+      const log  = workoutLogs[`${ei}_${si}`] || {};
+      const reps = log.reps != null ? log.reps : ex.reps;
+      const kgTxt = log.kg != null ? ` @ ${log.kg} kg` : (ex.vekt != null ? ` @ ${ex.vekt} kg` : '');
+      return `  Sett ${si + 1}: ${reps} reps${kgTxt}${log.done ? ' ✓' : ''}`;
+    }).join('\n');
+    return `${ex.navn}:\n${sets}`;
+  }).join('\n\n');
+
+  const btn = document.getElementById('ss-complete-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Lagrer…'; }
+
+  try {
+    const r = await fetch(url + '/api/okter/' + workoutSessionOkt.id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'Gjennomført', vurdering: lines }),
+    });
+    if (r.ok) {
+      showToast('✓ Økt fullført og lagret!');
+      // Update in-memory state
+      const o = allOkter.find(x => x.id === workoutSessionOkt.id);
+      if (o) { o.status = 'Gjennomført'; o.vurdering = lines; }
+      workoutLogs = {}; workoutExercises = null; workoutSessionOkt = null;
+      closeSessionSheet();
+      renderCurrentPlan();
+    } else {
+      showToast('Feil ved lagring', 'err');
+      if (btn) { btn.disabled = false; btn.textContent = 'Fullfør økt ✓'; }
+    }
+  } catch(e) {
+    showToast('Feil: ' + e.message, 'err');
+    if (btn) { btn.disabled = false; btn.textContent = 'Fullfør økt ✓'; }
+  }
+}
+
 function openInOktView() {
   const okt = sheetOkt;
   closeSessionSheet();
   if (!okt) return;
   showView('okter');
   setTimeout(() => {
-    // Find matching row by data-id attribute and click it
     const row = document.querySelector(`.okt-row[data-id="${okt.id}"]`);
     if (row) { row.click(); row.scrollIntoView({behavior:'smooth', block:'center'}); }
-    else {
-      // Fallback: populate detail panel directly
-      openDetail(okt, document.createElement('div'));
-    }
+    else { openDetail(okt, document.createElement('div')); }
   }, 150);
 }
 
@@ -2914,7 +3130,12 @@ function renderCurrentPlan(){
     .filter(o=>o.navn?.startsWith('Treningsplan'))
     .sort((a,b)=>b.dato.localeCompare(a.dato))[0];
 
-  const hasContent = upcomingGoals.length||faseNavn||planned.length||lastPlan;
+  const historikk=allOkter
+    .filter(o=>o.status==='Gjennomført'&&o.dato<today&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .sort((a,b)=>b.dato.localeCompare(a.dato))
+    .slice(0,40);
+
+  const hasContent = upcomingGoals.length||faseNavn||planned.length||historikk.length||lastPlan;
   if(!hasContent){ section.style.display='none'; return; }
   section.style.display='block';
 
@@ -2950,8 +3171,49 @@ function renderCurrentPlan(){
     </div>`;
   }
 
-  // ── Calendar grid ─────────────────────────────────────────────────────────
-  // Include completed sessions from this week (past days) + all planned
+  // ── Historikk (completed sessions) ────────────────────────────────────────
+  {
+    const histOpen = localStorage.getItem('plan_historikk_open') !== 'false';
+    const histHdr = histOpen ? '' : ' closed';
+    const histBody = histOpen ? '' : ' collapsed';
+    let histHtml = `<div class="plan-subsec-card">
+      <div class="plan-subsec-hdr${histHdr}" data-subsec="historikk" onclick="togglePlanSubsec('historikk')">
+        <div class="plan-subsec-info">
+          <span class="plan-subsec-title">Historikk</span>
+          <span class="plan-subsec-count">${historikk.length} økter</span>
+        </div>
+        <span class="plan-subsec-chevron">›</span>
+      </div>
+      <div class="plan-subsec-body${histBody}" id="subsec-body-historikk">`;
+    historikk.forEach(o=>{
+      const icon=o.sport?o.sport.split(' ')[0]:(o.type==='Race'?'🏁':o.type==='Styrke'?'💪':o.type==='Rehab'?'🦵':'🏃');
+      const meta=[o.varighet?o.varighet+' min':'',o.faktiskSnittHR?'HR '+o.faktiskSnittHR:''].filter(Boolean).join(' · ');
+      const safeO=JSON.stringify({id:o.id,navn:o.navn,dato:o.dato,type:o.type,sport:o.sport,varighet:o.varighet,planlagtPuls:o.planlagtPuls,faktiskSnittHR:o.faktiskSnittHR,faktiskMaksHR:o.faktiskMaksHR,status:o.status,vurdering:o.vurdering,pace:o.pace});
+      histHtml+=`<div class="cal-session done-session" style="margin:0;border-radius:0;border-left:none;border-right:none;border-top:none;" onclick='openSessionSheet(${safeO})'>
+        <span class="cal-session-icon">${icon}</span>
+        <div class="cal-session-body">
+          <div class="cal-session-name">${esc(o.navn)}</div>
+          <div class="cal-session-meta">${esc(formatDato(o.dato))}${meta?' · '+meta:''}</div>
+        </div>
+      </div>`;
+    });
+    histHtml+=`</div></div>`;
+    html+=histHtml;
+  }
+
+  // ── Calendar grid (Kommende) ───────────────────────────────────────────────
+  const kommOpen = localStorage.getItem('plan_kommende_open') !== 'false';
+  const kommHdr = kommOpen ? '' : ' closed';
+  const kommBody = kommOpen ? '' : ' collapsed';
+  html+=`<div class="plan-subsec-card">
+    <div class="plan-subsec-hdr${kommHdr}" data-subsec="kommende" onclick="togglePlanSubsec('kommende')">
+      <div class="plan-subsec-info">
+        <span class="plan-subsec-title">Kommende</span>
+        <span class="plan-subsec-count">${planned.length} planlagte</span>
+      </div>
+      <span class="plan-subsec-chevron">›</span>
+    </div>
+    <div class="plan-subsec-body${kommBody}" id="subsec-body-kommende">`;
   const calStart = new Date(today+'T12:00:00');
   const startDow = calStart.getDay()===0?6:calStart.getDay()-1;
   calStart.setDate(calStart.getDate()-startDow); // rewind to Monday of current week
@@ -3228,9 +3490,14 @@ Når du lager eller endrer en plan, output ALLTID et JSON-blokk. Hvert element k
 }
 \`\`\`
 Gyldige type-verdier: Sone 2, Terskel, Bakkeintervall, Styrke, Rehab, Race, Testløp.
-For Styrke/Rehab: bruk alltid "beskrivelse" med konkrete øvelser, sett/reps og eventuelle restriksjoner (f.eks. "3×12 clamshell · 2×15 Copenhagen plank · 3×10 hip thrust — unngå smerte >3/10").
+
+For Styrke og Rehab: "beskrivelse" MÅ være et JSON-objekt med exercises-array:
+{"exercises":[{"navn":"Øvelsesnavn","sett":3,"reps":12,"vekt":null,"merknad":"Valgfri instruksjon"},{"navn":"Neste øvelse","sett":3,"reps":15},...]}
+"vekt" = startforslag i kg som tall (null for kroppsvekt). "merknad" = kort teknikknote (maks 8 ord).
+Typisk 4–7 øvelser per styrke/rehab-økt. Vær presis på sett og reps.
+
 For løpeøkter: bruk "beskrivelse" til strukturert intervallopplegg eller temponot.
-"beskrivelse" vises for brukeren i appen og lagres i Notion — det er brukerens faktiske treningsprogram.
+"beskrivelse" vises og er interaktivt for brukeren — de krysser av sett og noterer vekter underveis.
 For analyse/diskusjon uten planendring: svar normalt uten JSON-blokk.
 Svar på norsk, vær konkret og direkte.`;
 

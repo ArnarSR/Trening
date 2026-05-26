@@ -56,6 +56,7 @@ jobs:
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
           cd frontend
+          touch .nojekyll   # skip Jekyll build, serve HTML directly
           git init -b gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

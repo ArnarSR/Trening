@@ -3240,8 +3240,7 @@ function renderCurrentPlan(){
     historikk.forEach(o=>{
       const icon=o.sport?o.sport.split(' ')[0]:(o.type==='Race'?'🏁':o.type==='Styrke'?'💪':o.type==='Rehab'?'🦵':'🏃');
       const meta=[o.varighet?o.varighet+' min':'',o.faktiskSnittHR?'HR '+o.faktiskSnittHR:''].filter(Boolean).join(' · ');
-      const safeO=JSON.stringify({id:o.id,navn:o.navn,dato:o.dato,type:o.type,sport:o.sport,varighet:o.varighet,planlagtPuls:o.planlagtPuls,faktiskSnittHR:o.faktiskSnittHR,faktiskMaksHR:o.faktiskMaksHR,status:o.status,vurdering:o.vurdering,pace:o.pace});
-      histHtml+=`<div class="cal-session done-session" style="margin:0;border-radius:0;border-left:none;border-right:none;border-top:none;" onclick='openSessionSheet(${safeO})'>
+      histHtml+=`<div class="cal-session done-session" style="margin:0;border-radius:0;border-left:none;border-right:none;border-top:none;" data-sessid="${esc(o.id)}">
         <span class="cal-session-icon">${icon}</span>
         <div class="cal-session-body">
           <div class="cal-session-name">${esc(o.navn)}</div>
@@ -3334,8 +3333,7 @@ function renderCurrentPlan(){
           const icon=o.sport?o.sport.split(' ')[0]:(o.type==='Race'?'🏁':o.type==='Styrke'?'💪':o.type==='Rehab'?'🦵':'🏃');
           const isDone=o.status==='Gjennomført';
           const meta=[o.varighet?o.varighet+' min':'',o.planlagtPuls?'HR '+o.planlagtPuls:'',isDone&&o.faktiskSnittHR?'HR '+o.faktiskSnittHR:''].filter(Boolean).join(' · ');
-          const safeO=JSON.stringify({id:o.id,navn:o.navn,dato:o.dato,type:o.type,sport:o.sport,varighet:o.varighet,planlagtPuls:o.planlagtPuls,faktiskSnittHR:o.faktiskSnittHR,faktiskMaksHR:o.faktiskMaksHR,status:o.status,vurdering:o.vurdering,pace:o.pace});
-          return `<div class="cal-session${isDone?' done-session':''}" onclick='openSessionSheet(${safeO})'>
+          return `<div class="cal-session${isDone?' done-session':''}" data-sessid="${esc(o.id)}">
             <span class="cal-session-icon">${icon}</span>
             <div class="cal-session-body">
               <div class="cal-session-name">${esc(o.navn)}</div>
@@ -3358,6 +3356,14 @@ function renderCurrentPlan(){
 
   sessionsEl.innerHTML = html;
   sessionsEl.style.display = 'block';
+
+  // Bind click handlers via data-sessid to avoid JSON-in-HTML-attribute escaping issues
+  sessionsEl.querySelectorAll('.cal-session[data-sessid]').forEach(el => {
+    el.addEventListener('click', () => {
+      const o = allOkter.find(x => x.id === el.dataset.sessid);
+      if (o) openSessionSheet(o);
+    });
+  });
 
   // Last plan summary (collapsed under sessions)
   if(lastPlan?.vurdering){

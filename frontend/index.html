@@ -381,11 +381,15 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
       </div>
     </div>
 
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
       <span style="font-size:12px;color:var(--text2);width:52px;">⚖ Vekt</span>
       <input type="number" id="helse-vekt" step="0.1" min="40" max="200" placeholder="—" inputmode="decimal"
         style="width:56px;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:6px;padding:5px 8px;font-size:13px;color:var(--text);font-family:var(--mono);-webkit-appearance:none;">
       <span style="font-size:11px;color:var(--text3);">kg</span>
+      <span style="font-size:12px;color:var(--text2);margin-left:8px;">💓 HRV</span>
+      <input type="number" id="helse-hrv" step="1" min="1" max="300" placeholder="—" inputmode="numeric"
+        style="width:52px;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:6px;padding:5px 8px;font-size:13px;color:var(--text);font-family:var(--mono);-webkit-appearance:none;">
+      <span style="font-size:11px;color:var(--text3);">ms</span>
     </div>
 
     <textarea class="form-input" id="helse-notat" rows="2" placeholder="Valgfritt notat…" style="width:100%;margin-bottom:10px;font-family:var(--sans);font-size:12px;resize:none;"></textarea>
@@ -2061,6 +2065,7 @@ async function runAnalyse(){
   const helseHistorikk=allHelse.slice(0,7).map(h=>{
     const parts=[];
     if(h.sovnTimer!=null)parts.push(`${h.sovnTimer}t søvn${h.sovnKvalitet?['','(dårlig)','(ok)','(bra)'][h.sovnKvalitet]:''}`);
+    if(h.hrv!=null)parts.push(`HRV ${h.hrv}ms`);
     if(h.protein!=null)parts.push(`${h.protein}/6P protein`);
     if(h.energi!=null)parts.push(`energi ${h.energi}/5`);
     return`${h.dato}: ${parts.join(', ')||'—'}`;
@@ -2457,6 +2462,7 @@ async function autoLoadTodayBrief(okt){
   const helseHistorikk=allHelse.slice(0,7).reverse().map(h=>{
     const p=[];
     if(h.sovnTimer!=null)p.push(`${h.sovnTimer}t søvn${h.sovnKvalitet?['','(dårlig)','(ok)','(bra)'][h.sovnKvalitet]:''}`);
+    if(h.hrv!=null)p.push(`HRV ${h.hrv}ms`);
     if(h.energi!=null)p.push(`energi ${h.energi}/5`);
     if(h.protein!=null)p.push(`protein ${h.protein}g`);
     if(h.vekt!=null)p.push(`${h.vekt}kg`);
@@ -2785,10 +2791,11 @@ async function logHelse(){
   const sovnTimer=document.getElementById('helse-sovn').value;
   const protein=document.getElementById('helse-protein').value;
   const vekt=document.getElementById('helse-vekt').value;
+  const hrv=document.getElementById('helse-hrv').value;
   const notat=document.getElementById('helse-notat').value.trim();
 
   // Require at least one field
-  if(!sovnTimer&&!protein&&!selectedSovnKval&&!selectedEnergi&&!vekt&&!notat) return;
+  if(!sovnTimer&&!protein&&!selectedSovnKval&&!selectedEnergi&&!vekt&&!hrv&&!notat) return;
 
   const statusEl=document.getElementById('helse-status');
   statusEl.textContent='Lagrer…';statusEl.style.color='var(--text2)';
@@ -2802,6 +2809,8 @@ async function logHelse(){
   if(selectedEnergi)   body.energi=selectedEnergi;
   const vektVal=parseFloat(vekt);
   if(!isNaN(vektVal)&&vekt) body.vekt=vektVal;
+  const hrvVal=parseInt(hrv);
+  if(!isNaN(hrvVal)&&hrv) body.hrv=hrvVal;
   if(notat)        body.notat=notat;
 
   try{
@@ -2816,6 +2825,7 @@ async function logHelse(){
       document.getElementById('helse-sovn').value='';
       document.getElementById('helse-protein').value='';
       document.getElementById('helse-vekt').value='';
+      document.getElementById('helse-hrv').value='';
       document.getElementById('helse-notat').value='';
       selectedSovnKval=null;selectedEnergi=null;
       document.querySelectorAll('.sovn-kval-btn,.energi-btn').forEach(b=>b.classList.remove('active'));

@@ -271,6 +271,7 @@ export default {
           if (b.protein      != null) props['Protein (porsjoner)'] = { number: b.protein };
           if (b.energi       != null) props['Energinivå (1-5)']    = { number: b.energi };
           if (b.vekt         != null) props['Vekt (kg)']            = { number: b.vekt };
+          if (b.hrv          != null) props['HRV (ms)']             = { number: b.hrv };
           if (b.notat) props['Notat'] = { rich_text: [{ text: { content: b.notat } }] };
           return props;
         };
@@ -989,6 +990,7 @@ function mapHelsePage(page) {
     protein:      p['Protein (porsjoner)']?.number ?? null,
     energi:       p['Energinivå (1-5)']?.number    ?? null,
     vekt:         p['Vekt (kg)']?.number            ?? null,
+    hrv:          p['HRV (ms)']?.number             ?? null,
     notat:        p['Notat']?.rich_text?.[0]?.plain_text || '',
   };
 }

@@ -1681,7 +1681,7 @@ function updateStats(){
   const fase=localStorage.getItem('fase_navn')||'—';
   const faseSub=(localStorage.getItem('fase_prinsipper')||'').split('\n')[0].replace(/^[•\-]\s*/,'')||'Aktiv restitusjon';
   const paceToSec=p=>{const[m,s]=(p||'').split(':');return m&&s?+m*60+ +s:Infinity;};
-  const prSessions=allOkter.filter(o=>(o.type==='Testløp'||o.type==='Race')&&o.status==='Gjennomført'&&o.pace&&(o.distanse==null||o.distanse>=1));
+  const prSessions=allOkter.filter(o=>(o.type==='Testløp'||o.type==='Race')&&o.status==='Gjennomført'&&o.pace&&(o.distance==null||o.distance>=1));
   prSessions.sort((a,b)=>paceToSec(a.pace)-paceToSec(b.pace));
   const bestPR=prSessions[0];
   const prText=bestPR?bestPR.pace+'/km':'—';
@@ -2157,6 +2157,15 @@ function getDateRange(days=7){
   return dates;
 }
 
+function bindIdagSessionClicks(container){
+  container.querySelectorAll('[data-sessid]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const o=allOkter.find(x=>x.id===el.dataset.sessid);
+      if(o) openSessionSheet(o);
+    });
+  });
+}
+
 function renderIdagView(){
   const today=getTodayDate();
   const dates=getDateRange(7);
@@ -2171,7 +2180,7 @@ function renderIdagView(){
   document.getElementById('idag-sub').textContent=new Date(today+'T12:00:00').toLocaleDateString('no-NO',{day:'numeric',month:'short',year:'numeric'});
 
   const fase=todayOkt?.fase||localStorage.getItem('fase_navn')||'Fase 0';
-  const faseSub=fase==='Fase 0'?'Aktiv restitusjon':fase==='Fase 1'?'Oppbygging':'';
+  const faseSub=(localStorage.getItem('fase_prinsipper')||'').split('\n')[0].replace(/^[•\-]\s*/,'')||'Aktiv restitusjon';
   document.getElementById('idag-fase').textContent=fase;
   document.getElementById('idag-fase-sub').textContent=faseSub;
 
@@ -2187,6 +2196,7 @@ function renderIdagView(){
 
   if(todayOkt){
     dailySection.innerHTML=renderIdagOktRow(todayOkt,true);
+    bindIdagSessionClicks(dailySection);
     if(todayOkt.status==='Gjennomført'){
       // Show saved analysis for completed sessions — always overwrite stale content
       if(todayOkt.vurdering&&todayOkt.vurdering.length>20){
@@ -2214,6 +2224,7 @@ function renderIdagView(){
     const firstHtml=renderIdagOktRow(weekOkter[0],false,featureFirst);
     const restHtml=weekOkter.slice(1).map(o=>renderIdagOktRow(o,false,false)).join('');
     weekSection.innerHTML=firstHtml+restHtml;
+    bindIdagSessionClicks(weekSection);
   }else{
     weekSection.innerHTML='<div class="empty-state"><div class="icon">📭</div>Ingen kommende økter</div>';
   }
@@ -2231,7 +2242,7 @@ function renderIdagOktRow(okt,featured=false,isNext=false){
 
   if(isNext){
     return`
-      <div style="background:linear-gradient(135deg,rgba(139,255,200,0.12) 0%,rgba(139,255,200,0.04) 100%);border:0.5px solid rgba(139,255,200,0.3);border-radius:var(--rlg);padding:16px 14px;margin-bottom:12px;">
+      <div data-sessid="${esc(okt.id)}" style="background:linear-gradient(135deg,rgba(139,255,200,0.12) 0%,rgba(139,255,200,0.04) 100%);border:0.5px solid rgba(139,255,200,0.3);border-radius:var(--rlg);padding:16px 14px;margin-bottom:12px;cursor:pointer;">
         <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;margin-bottom:8px;">→ Neste økt</div>
         <div style="display:flex;align-items:flex-start;gap:12px;">
           <span class="okt-type ${typeClass}" style="font-size:10px;padding:3px 8px;flex-shrink:0;margin-top:2px;">${okt.type?.toUpperCase().slice(0,5)||'ØKT'}</span>
@@ -2241,7 +2252,7 @@ function renderIdagOktRow(okt,featured=false,isNext=false){
             ${(okt.varighet||okt.distance||okt.planlagtPuls)?`<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:3px;">${[okt.varighet?okt.varighet+'min':'',okt.distance?okt.distance+'km':'',okt.planlagtPuls?'HR: '+okt.planlagtPuls:''].filter(Boolean).join(' · ')}</div>`:''}
           </div>
           <div style="flex-shrink:0;text-align:right;">
-            ${!isDone?`<button class="okt-mark-btn" style="margin-bottom:6px;" onclick="markAsComplete('${okt.id}')">✓ Gjennomført</button>`:''}
+            ${!isDone?`<button class="okt-mark-btn" style="margin-bottom:6px;" onclick="event.stopPropagation();markAsComplete('${okt.id}')">✓ Gjennomført</button>`:''}
             <div style="font-size:11px;color:var(--text2);font-family:var(--mono);">${hrTxt}</div>
           </div>
         </div>
@@ -2249,7 +2260,7 @@ function renderIdagOktRow(okt,featured=false,isNext=false){
   }
 
   return`
-    <div class="okt-row${featured?' okt-row-featured':''}">
+    <div class="okt-row${featured?' okt-row-featured':''}" data-sessid="${esc(okt.id)}">
       <span class="okt-type ${typeClass}">${okt.type?.toUpperCase().slice(0,5)||'ØKT'}</span>
       <div class="okt-center">
         <div class="okt-name">${esc(okt.navn)}</div>
@@ -2257,7 +2268,7 @@ function renderIdagOktRow(okt,featured=false,isNext=false){
       </div>
       <div class="okt-right">
         <div style="display:flex;gap:6px;align-items:center;">
-          ${!isDone?`<button class="okt-mark-btn" onclick="markAsComplete('${okt.id}')">✓ Gjennomført</button>`:''}
+          ${!isDone?`<button class="okt-mark-btn" onclick="event.stopPropagation();markAsComplete('${okt.id}')">✓ Gjennomført</button>`:''}
           <div class="okt-hr">${hrTxt}</div>
           <div class="okt-status ${statusClass}">${statusIcon}</div>
         </div>
@@ -2574,7 +2585,7 @@ async function markAsComplete(oktId){
   if(!url){showToast('Sett Worker URL under Innstillinger','err');showView('innstillinger');return;}
   try{
     const r=await fetch(`${url}/api/okter/${oktId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'Gjennomført'})});
-    if(r.ok){okt.status='Gjennomført';renderIdagView();}
+    if(r.ok){okt.status='Gjennomført';renderIdagView();updateStats();}
     else{showToast('Klarte ikke oppdatere status','err');}
   }catch(e){showToast('Feil: '+e.message,'err');}
 }
@@ -3668,8 +3679,8 @@ For løpeøkter: bruk "beskrivelse" til strukturert intervallopplegg eller tempo
 For analyse/diskusjon uten planendring: svar normalt uten JSON-blokk.
 Svar på norsk, vær konkret og direkte.`;
 
-  const historyLines=planHistory.slice(0,-1).map(m=>(m.role==='user'?'Arnar':'Trener')+': '+m.content).join('\n\n');
-  const fullPrompt=systemCtx+(historyLines?`\n\nTidligere samtale:\n${historyLines}`:'')+`\n\nArnar: ${msg}\nTrener:`;
+  const historyLines=planHistory.slice(0,-1).map(m=>(m.role==='user'?'Du':'Trener')+': '+m.content).join('\n\n');
+  const fullPrompt=systemCtx+(historyLines?`\n\nTidligere samtale:\n${historyLines}`:'')+`\n\nDu: ${msg}\nTrener:`;
 
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:fullPrompt})});

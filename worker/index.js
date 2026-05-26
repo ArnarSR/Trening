@@ -622,7 +622,11 @@ async function syncLatestStrava(env) {
     props['Strava ID'] = { rich_text: [{ text: { content: stravaId } }] };
     const patchBody = { properties: props };
     if (sport) patchBody.icon = { type: 'emoji', emoji: sport.icon };
-    await notionRequest(env, 'PATCH', `/pages/${existing.id}`, patchBody);
+    const patchRes = await notionRequest(env, 'PATCH', `/pages/${existing.id}`, patchBody);
+    if (!patchRes.ok) {
+      const errData = await patchRes.json().catch(() => ({}));
+      return json({ error: 'Notion PATCH feil', detail: errData }, patchRes.status || 500);
+    }
     await env.SETTINGS.delete('okter_cache');
     return json({ alreadyExists: false, synced: 1, created: 0, total: 1 });
   }
@@ -853,7 +857,7 @@ async function applyPlanSessions(env, sessions) {
 
   const calId = encodeURIComponent(env.GOOGLE_CALENDAR_ID?.trim() || 'primary');
   const notionIds = [], calendarIds = [];
-  let created = 0, updated = 0, deleted = 0;
+  let created = 0, updated = 0, deleted = 0, dirty = false;
 
   for (const s of capped) {
     const action = s.action || (s.id ? 'update' : 'create');
@@ -863,7 +867,7 @@ async function applyPlanSessions(env, sessions) {
     if (action === 'delete' && s.id) {
       // Archive the Notion page
       const res = await notionRequest(env, 'PATCH', `/pages/${s.id}`, { archived: true });
-      if (res.ok) { deleted++; await env.SETTINGS.delete('okter_cache'); }
+      if (res.ok) { deleted++; dirty = true; }
       continue;
     }
 
@@ -884,7 +888,7 @@ async function applyPlanSessions(env, sessions) {
       const patchBody = { properties: props };
       if (notionSport) patchBody.icon = { type: 'emoji', emoji: notionSport.icon };
       const res = await notionRequest(env, 'PATCH', `/pages/${s.id}`, patchBody);
-      if (res.ok) { updated++; await env.SETTINGS.delete('okter_cache'); }
+      if (res.ok) { updated++; dirty = true; }
       continue;
     }
 
@@ -897,7 +901,7 @@ async function applyPlanSessions(env, sessions) {
     const nRes  = await notionRequest(env, 'POST', '/pages', createBody);
     const nData = await nRes.json();
     if (!nRes.ok) continue;
-    if (nData.id) { notionIds.push(nData.id); await env.SETTINGS.delete('okter_cache'); }
+    if (nData.id) { notionIds.push(nData.id); dirty = true; }
 
     // GCal event for new sessions only
     if (token && s.dato) {
@@ -930,6 +934,7 @@ async function applyPlanSessions(env, sessions) {
     created++;
   }
 
+  if (dirty) await env.SETTINGS.delete('okter_cache');
   return json({ created, updated, deleted, notionIds, calendarIds });
 }
 

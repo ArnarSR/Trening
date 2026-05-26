@@ -522,10 +522,10 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   </div>
 
   <div class="stat-grid">
-    <div class="stat-card"><div class="stat-label">Race-PR</div><div class="stat-val accent" id="s-pr">—</div><div class="stat-sub">Grefsenkollen</div></div>
+    <div class="stat-card"><div class="stat-label">Race-PR</div><div class="stat-val accent" id="s-pr">—</div><div class="stat-sub" id="s-pr-sub">—</div></div>
     <div class="stat-card"><div class="stat-label">Gjennomført</div><div class="stat-val" id="s-done">—</div><div class="stat-sub">Totalt</div></div>
-    <div class="stat-card"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:15px">20. jun</div><div class="stat-sub">Sommernatt 10k</div></div>
-    <div class="stat-card"><div class="stat-label">Høstmål</div><div class="stat-val" style="font-size:15px">1:45</div><div class="stat-sub">Oslo HM sept</div></div>
+    <div class="stat-card"><div class="stat-label">Neste løp</div><div class="stat-val" style="font-size:15px" id="s-next-race">—</div><div class="stat-sub" id="s-next-race-sub">—</div></div>
+    <div class="stat-card"><div class="stat-label">Siste mål</div><div class="stat-val" style="font-size:15px" id="s-last-goal">—</div><div class="stat-sub" id="s-last-goal-sub">—</div></div>
   </div>
 
   <div class="sec-head">
@@ -585,9 +585,9 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   <div class="chip-row">
     <button class="chip" onclick="setQuery('Analyser utviklingen i alle bakkeintervallene. Vis trend i HR og pace per arbeidsrap.')">Intervall-progresjon</button>
     <button class="chip" onclick="setQuery('Er jeg polarisert nok? Sonedistribusjon S2 vs S3/S4/S5.')">Sonedistribusjon</button>
-    <button class="chip" onclick="setQuery('Restitusjonsvurdering for Fase 0 — hva bør jeg gjøre denne uka?')">Restitusjon nå</button>
-    <button class="chip" onclick="setQuery('Analyser Grefsenkollen race-data. Hva gikk bra, hva kan forbedres?')">Race analyse</button>
-    <button class="chip" onclick="setQuery('Hva bør fokuset være i Fase 1 (juni) mot sub-1:45 på Oslo Halvmaraton?')">Fase 1 plan</button>
+    <button class="chip" onclick="setQuery('Restitusjonsvurdering — hva bør jeg gjøre denne uka basert på søvn og belastning?')">Restitusjon nå</button>
+    <button class="chip" onclick="setQuery('Analyser de siste race-dataene mine. Hva gikk bra, hva kan forbedres?')">Race analyse</button>
+    <button class="chip" onclick="setQuery('Hva bør treningsfokuset mitt være neste 4 uker mot neste mål?')">Neste fase</button>
   </div>
   <textarea class="form-input" id="analyse-query" style="width:100%;min-height:90px;resize:vertical;font-family:var(--sans);margin-bottom:8px;" placeholder="Skriv spørsmålet ditt…"></textarea>
   <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -1687,12 +1687,34 @@ function updateStats(){
   const prText=bestPR?bestPR.pace+'/km':'—';
   const prSub=bestPR?esc(bestPR.navn)+' · '+formatDato(bestPR.dato)+' 🏆':'Ingen race ennå';
   document.getElementById('s-pr').textContent=prText;
+  document.getElementById('s-pr-sub').textContent=bestPR?esc(bestPR.navn.slice(0,20))+' · '+formatDato(bestPR.dato):'Ingen race ennå';
   document.getElementById('hero-pr').textContent=prText;
   document.getElementById('hero-sub').textContent=prSub;
   document.getElementById('hero-phase').textContent=fase;
   document.getElementById('hero-phase-sub').textContent=faseSub;
   document.getElementById('sb-fase').textContent=fase+(faseSub&&faseSub!=='Aktiv restitusjon'?' · '+faseSub.slice(0,20):'');
   document.getElementById('sb-pr').textContent=bestPR?bestPR.pace+' 🎉':'—';
+
+  // Dynamic next race + last goal from allGoals
+  const today=getTodayDate();
+  const races=allGoals.filter(g=>g.status!=='Gjennomført'&&g.dato>=today).sort((a,b)=>a.dato.localeCompare(b.dato));
+  const nextRace=races.find(g=>g.type==='Race')||races[0];
+  const lastGoal=allGoals.filter(g=>g.status==='Gjennomført').sort((a,b)=>b.dato.localeCompare(a.dato))[0];
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  if(nextRace){
+    const d=new Date(nextRace.dato+'T12:00:00');
+    const dStr=d.getDate()+'. '+['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'][d.getMonth()];
+    set('s-next-race', dStr);
+    set('s-next-race-sub', nextRace.navn.slice(0,18));
+  }else{
+    set('s-next-race','—'); set('s-next-race-sub','Ingen planlagt');
+  }
+  if(lastGoal){
+    set('s-last-goal', lastGoal.navn.length<=12?lastGoal.navn:lastGoal.navn.slice(0,11)+'…');
+    set('s-last-goal-sub', lastGoal.planlagtPuls?'Mål: '+lastGoal.planlagtPuls:formatDato(lastGoal.dato));
+  }else{
+    set('s-last-goal','—'); set('s-last-goal-sub','Ingen ennå');
+  }
 }
 
 // ── Detail panel ──────────────────────────────────────────────────────────────

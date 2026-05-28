@@ -278,6 +278,13 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 #nc-kcal-bar{display:none;font-size:12px;color:var(--text2);margin-bottom:8px;padding:7px 11px;background:var(--bg2);border-radius:var(--r);border:0.5px solid var(--border);line-height:1.5;}
 #nc-kcal-bar strong{color:var(--accent);font-family:var(--mono);}
 #nc-kcal-detail{color:var(--text3);font-size:11px;}
+.meal-card{padding:10px 0;border-bottom:0.5px solid var(--border);}
+.meal-card:last-child{border-bottom:none;padding-bottom:0;}
+.meal-card-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
+.meal-card-name{font-size:12px;font-weight:600;color:var(--text);}
+.meal-card-kcal{font-size:11px;font-family:var(--mono);color:var(--accent);}
+.meal-card-body{font-size:12px;color:var(--text2);line-height:1.6;}
+.meal-card-macro{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px;}
 .hand-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:1000;display:none;align-items:center;justify-content:center;}
 .hand-modal-backdrop.open{display:flex;}
 .hand-modal{background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:var(--rlg);padding:24px;max-width:340px;width:90%;}
@@ -502,6 +509,10 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
       </div>
     </div>
     <div class="nc-notat" id="nc-notat">Beregner…</div>
+    <div style="margin-top:8px;">
+      <button class="btn btn-sm" id="meal-plan-btn" onclick="generateMealPlan()" style="width:100%;justify-content:center;">🍽️ Foreslå måltidsplan for i dag</button>
+    </div>
+    <div id="meal-plan-result" style="display:none;margin-top:8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:12px;"></div>
   </div>
 
   <!-- Dagbok / logg -->
@@ -923,6 +934,35 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
     <div class="settings-title">Pulssoner</div>
     <div class="settings-card">
       <div id="zones-display" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;font-family:var(--mono);"></div>
+    </div>
+  </div>
+  <div class="settings-section">
+    <div class="settings-title">Ernæring &amp; måltidsplan</div>
+    <div class="settings-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Bestemmer hvordan «Foreslå måltidsplan» fordeler kalorier og makroer for dagen.</div>
+      <div class="form-grid" style="margin-bottom:12px;">
+        <div class="form-field">
+          <label class="form-label">Antall måltider</label>
+          <select class="setting-input" id="s-meal-count" onchange="saveMealPlanSettings()">
+            <option value="2">2 måltider</option>
+            <option value="3">3 måltider</option>
+            <option value="4">4 måltider</option>
+            <option value="5">5 måltider</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Snacks</label>
+          <select class="setting-input" id="s-snack-count" onchange="saveMealPlanSettings()">
+            <option value="0">Ingen snacks</option>
+            <option value="1">1 snack</option>
+            <option value="2">2 snacks</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Matpreferanser / diett</label>
+        <input type="text" class="setting-input" id="s-food-prefs" placeholder="Eks: laktosefri, vegetar, ingen nøtter…" oninput="saveMealPlanSettings()">
+      </div>
     </div>
   </div>
   <div class="settings-section">
@@ -1448,6 +1488,138 @@ let allDagbok = [];
 let allHelse = [];
 let selectedSovnKval = null;
 let selectedEnergi = null;
+
+// ── Meal plan settings ────────────────────────────────────────────────────────
+function saveMealPlanSettings(){
+  try{
+    localStorage.setItem('meal_count',document.getElementById('s-meal-count')?.value||'3');
+    localStorage.setItem('snack_count',document.getElementById('s-snack-count')?.value||'1');
+    localStorage.setItem('food_prefs',document.getElementById('s-food-prefs')?.value?.trim()||'');
+  }catch(e){}
+}
+function loadMealPlanSettings(){
+  try{
+    const mc=document.getElementById('s-meal-count');
+    const sc=document.getElementById('s-snack-count');
+    const fp=document.getElementById('s-food-prefs');
+    if(mc)mc.value=localStorage.getItem('meal_count')||'3';
+    if(sc)sc.value=localStorage.getItem('snack_count')||'1';
+    if(fp)fp.value=localStorage.getItem('food_prefs')||'';
+  }catch(e){}
+}
+
+async function generateMealPlan(){
+  const url=getWorkerUrl();
+  if(!url){alert('Sett Worker URL i Innstillinger');return;}
+  const btn=document.getElementById('meal-plan-btn');
+  const result=document.getElementById('meal-plan-result');
+  if(btn){btn.disabled=true;btn.textContent='Beregner måltidsplan…';}
+  if(result)result.style.display='none';
+
+  const targets=loadNutritionTargets(null);
+  const mealCount=parseInt(localStorage.getItem('meal_count')||'3');
+  const snackCount=parseInt(localStorage.getItem('snack_count')||'1');
+  const foodPrefs=localStorage.getItem('food_prefs')||'';
+  const today=getTodayDate();
+  const todaySessions=allOkter.filter(o=>
+    o.dato===today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Mål'
+  );
+  const sessionInfo=todaySessions.map(o=>`${o.navn} (${o.type||'—'}${o.varighet?', '+o.varighet+' min':''}${o.status==='Gjennomført'?' ✓':''})`)
+    .join('; ');
+  const MEAL_NAMES=['Frokost','Lunsj','Ettermiddagsmat','Middag','Kvelds'];
+  const mealNames=MEAL_NAMES.slice(0,mealCount);
+  const snackList=snackCount===0?'Ingen snacks':snackCount===1?'1 snack (f.eks. mellom lunsj og middag)':'2 snacks (formiddag og ettermiddag)';
+
+  const prompt=`Du er en ernæringsrådgiver. Lag en konkret eksempel-måltidsplan for i dag.
+
+DAGSBUDSJETT:
+- ${targets.targetKcal} kcal totalt (${DAY_LABELS[targets.dayType]||'ukjent dagtype'})
+- Protein: ${targets.proteinG}g | Karbo: ${targets.carbsG}g | Fett: ${targets.fatG}g
+${sessionInfo?'- Dagens treningsøkter: '+sessionInfo:'- Hviledag / ingen planlagte økter'}
+${foodPrefs?'- Preferanser: '+foodPrefs:''}
+
+STRUKTUR:
+- Måltider: ${mealNames.join(', ')}
+- Snacks: ${snackList}
+
+Svar BARE med JSON på dette formatet (ingen tekst utenfor JSON):
+{
+  "meals": [
+    {
+      "navn": "Frokost",
+      "tid": "07:30",
+      "matvarer": "Havregrøt (80g) med bær (100g) og gresk yoghurt (150g)",
+      "kcal": 480,
+      "protein": 22,
+      "notat": ""
+    }
+  ],
+  "snacks": [
+    {
+      "navn": "Snack",
+      "tid": "15:00",
+      "matvarer": "Banan + en neve mandler (30g)",
+      "kcal": 210,
+      "protein": 5,
+      "notat": ""
+    }
+  ],
+  "oppsummering": "Én setning om timing rundt trening og hovedprinsipp for dagen."
+}
+
+Vær konkret (gram-mengder der relevant), norsk mat er fint. Fyll inn notat ved måltider som er spesielt viktige rundt trening.`;
+
+  try{
+    const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    const raw=(d.result||d.text||'').trim();
+
+    // Parse JSON from response
+    let plan=null;
+    try{
+      const m=raw.match(/\{[\s\S]*\}/);
+      if(m)plan=JSON.parse(m[0]);
+    }catch(e){}
+
+    if(result){
+      result.style.display='block';
+      if(!plan){
+        // Fallback: show raw text with renderMd
+        result.innerHTML=`<div style="font-size:12px;line-height:1.6;color:var(--text2);">${renderMd(raw)}</div>`;
+      } else {
+        const allItems=[...(plan.meals||[]),...(plan.snacks||[])];
+        const html=allItems.map(item=>{
+          const macroStr=item.protein!=null?`${item.protein}g protein`:'';
+          return `<div class="meal-card">
+            <div class="meal-card-head">
+              <span class="meal-card-name">${esc(item.navn)}${item.tid?' <span style="font-weight:400;color:var(--text3);font-size:10px;">'+esc(item.tid)+'</span>':''}</span>
+              <span class="meal-card-kcal">${item.kcal?item.kcal+' kcal':''}</span>
+            </div>
+            <div class="meal-card-body">${esc(item.matvarer)}</div>
+            ${macroStr||item.notat?`<div class="meal-card-macro">${[macroStr,item.notat?'💡 '+esc(item.notat):''].filter(Boolean).join(' · ')}</div>`:''}
+          </div>`;
+        }).join('');
+        const totalKcal=allItems.reduce((s,i)=>s+(i.kcal||0),0);
+        const totalP=allItems.reduce((s,i)=>s+(i.protein||0),0);
+        result.innerHTML=`
+          <div style="font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
+            Foreslått plan · ${totalKcal} kcal · ${totalP}g protein
+          </div>
+          ${html}
+          ${plan.oppsummering?`<div style="margin-top:10px;font-size:11px;color:var(--text3);font-style:italic;border-top:0.5px solid var(--border);padding-top:8px;">${esc(plan.oppsummering)}</div>`:''}
+          <div style="display:flex;gap:6px;margin-top:10px;">
+            <button class="btn btn-sm" onclick="generateMealPlan()" style="flex:1;justify-content:center;">↺ Nytt forslag</button>
+            <button class="btn btn-sm" onclick="document.getElementById('meal-plan-result').style.display='none'" style="justify-content:center;">✕</button>
+          </div>`;
+      }
+    }
+  }catch(e){
+    if(result){result.style.display='block';result.innerHTML=`<div style="font-size:12px;color:var(--warn);">Feil: ${esc(e.message)}</div>`;}
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🍽️ Foreslå måltidsplan for i dag';}
+  }
+}
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 function getWorkerUrl(){try{return localStorage.getItem('worker_url')||'';}catch(e){return '';}}
@@ -4070,6 +4242,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadSettings();
 loadCalSettings();
+loadMealPlanSettings();
 loadProfilFields();
 loadPrinsipper();
 loadKontekst();

@@ -107,7 +107,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .ss-badge{display:inline-block;background:rgba(200,240,96,0.10);border:0.5px solid rgba(200,240,96,0.2);border-radius:6px;padding:3px 9px;font-size:11px;color:var(--accent);font-family:var(--mono);margin:0 5px 6px 0;}
 .ss-badge.done{background:rgba(255,255,255,0.05);border-color:var(--border);color:var(--text2);}
 .ss-section{font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 7px;display:flex;justify-content:space-between;align-items:center;}
-.ss-instr{font-size:13px;line-height:1.75;color:var(--text2);white-space:pre-wrap;background:var(--bg3);border-radius:10px;padding:12px 14px;}
+
 .ss-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;}
 .ss-stat{background:var(--bg3);border-radius:10px;padding:10px 12px;}
 .ss-stat-lbl{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;}
@@ -158,9 +158,16 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:var(--sans);font
 .btn:disabled{opacity:.35;cursor:not-allowed;transform:none;}
 .btn-accent{background:var(--accent);color:#0f0f0f;border-color:var(--accent);font-weight:600;}
 .btn-sm{padding:7px 11px;font-size:11px;min-height:32px;}
-.analysis-box{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r);padding:14px;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;}
+.analysis-box{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r);padding:14px;font-size:13px;line-height:1.7;color:var(--text);}
 .analysis-box.loading{color:var(--text3);font-style:italic;}
 .analysis-box.error{color:var(--danger);}
+.analysis-summary-line{font-size:13px;line-height:1.65;color:var(--text);font-weight:500;}
+.analysis-details{margin-top:8px;}
+.analysis-toggle{font-size:11px;color:var(--accent);cursor:pointer;list-style:none;padding:3px 0;font-family:var(--mono);user-select:none;}
+.analysis-toggle::-webkit-details-marker{display:none;}
+details[open] .analysis-toggle{color:var(--text3);}
+.analysis-detail-body{padding-top:10px;margin-top:2px;border-top:0.5px solid var(--border);font-size:12px;line-height:1.75;color:var(--text2);}
+.ss-instr{font-size:13px;line-height:1.75;color:var(--text2);background:var(--bg3);border-radius:10px;padding:12px 14px;}
 .alert{border-radius:var(--r);padding:10px 13px;font-size:12px;margin-bottom:12px;border:0.5px solid;}
 .alert-warn{background:rgba(255,179,71,0.08);color:var(--warn);border-color:rgba(255,179,71,0.2);}
 .alert-ok{background:rgba(200,240,96,0.08);color:var(--accent);border-color:rgba(200,240,96,0.2);}
@@ -1580,18 +1587,29 @@ async function autoAnalyseIdagOkt(){
   aiBox.className='analysis-box loading';
   aiBox.textContent='Claude analyserer dagens økt…';
 
-  const prompt=buildCoachContext()+'\n\n'+buildOktContext(okt)+'\n\nGi en kort treneranalyse på norsk (3–4 setninger). Er intensiteten riktig for fasen? Hva var bra? Hva justeres til neste gang?';
+  const prompt=buildCoachContext()+'\n\n'+buildOktContext(okt)+'\n\nSvar med GYLDIG JSON og INGEN ANNEN TEKST:\n{"oppsummering":"1 setning oppsummering av gjennomføringen","analyse":"3–4 setninger konkret analyse: intensitet vs. planlagt sone, hva gikk bra, hva justeres neste gang"}';
 
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const d=await r.json();
-    const text=d.text||'Ingen respons.';
+    const raw=d.text||'';
+    let oppsummering='', analyse=raw;
+    try{
+      const stripped=raw.replace(/^```(?:json)?\s*/m,'').replace(/\s*```\s*$/m,'').trim();
+      const p=JSON.parse(stripped);
+      oppsummering=p.oppsummering||''; analyse=p.analyse||raw;
+    }catch(_){
+      const s=raw.indexOf('{'),e=raw.lastIndexOf('}');
+      if(s!==-1&&e>s){try{const p=JSON.parse(raw.slice(s,e+1));oppsummering=p.oppsummering||'';analyse=p.analyse||raw;}catch(_){}}
+    }
     aiBox.className='analysis-box';
-    aiBox.textContent=text;
+    const displayText=oppsummering?(oppsummering+'\n\n'+analyse):analyse;
+    renderAnalysis(displayText||'Ingen respons.',aiBox);
     aiStatus.textContent='✓ Lagret til Notion';
     // Lagre til Notion
-    await fetch(`${url}/api/okter/${okt.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({vurdering:text})});
-    okt.vurdering=text;
+    const saveText=displayText||analyse;
+    await fetch(`${url}/api/okter/${okt.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({vurdering:saveText})});
+    okt.vurdering=saveText;
   }catch(e){
     aiBox.className='analysis-box error';
     aiBox.textContent='Kunne ikke analysere: '+e.message;
@@ -1879,9 +1897,13 @@ function openSessionSheet(okt) {
     instrEl.innerHTML = isActive ? _renderWorkoutActive(exercises) : _renderWorkoutPreview(exercises);
   } else if (okt.vurdering && okt.vurdering.trim()) {
     instrSec.style.display = 'block';
-    instrLabel.innerHTML = `<span>${isDone ? 'Notater' : 'Treningsinstruksjoner'}</span>`;
+    instrLabel.innerHTML = `<span>${isDone ? 'Analyse' : 'Treningsinstruksjoner'}</span>`;
     instrEl.className = 'ss-instr';
-    instrEl.textContent = okt.vurdering.trim();
+    if (isDone) {
+      renderAnalysis(okt.vurdering.trim(), instrEl);
+    } else {
+      instrEl.innerHTML = renderMd(okt.vurdering.trim());
+    }
   } else {
     instrSec.style.display = 'none';
   }
@@ -2012,7 +2034,7 @@ async function analyseOkt(){
   const varighet=document.getElementById('f-varighet').value;
   const pace=document.getElementById('f-pace').value;
   const vurdering=document.getElementById('f-vurdering').value;
-  const prompt=buildCoachContext()+'\n\n'+buildOktContext(currentOkt,{hrAvg,hrMax,varighet,pace,vurdering})+'\n\nGi en konkret treneranalyse på norsk (4–6 setninger). Vurder:\n1. Treffer intensiteten planlagt sone?\n2. Hva var bra?\n3. Hva kan forbedres til neste tilsvarende økt?\nVær direkte og konkret.';
+  const prompt=buildCoachContext()+'\n\n'+buildOktContext(currentOkt,{hrAvg,hrMax,varighet,pace,vurdering})+'\n\nSvar med GYLDIG JSON og INGEN ANNEN TEKST:\n{"oppsummering":"1 setning oppsummering av gjennomføringen","analyse":"4–6 setninger konkret analyse: 1) Treffer intensiteten planlagt sone? 2) Hva var bra? 3) Hva forbedres til neste tilsvarende økt? Vær direkte."}';
   const section=document.getElementById('dp-analysis-section');
   const box=document.getElementById('dp-analysis-text');
   section.style.display='block';
@@ -2022,10 +2044,23 @@ async function analyseOkt(){
     if(!workerUrl)throw new Error('Sett Worker URL under Innstillinger');
     const r=await fetch(workerUrl+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const d=await r.json();
-    const text=d.text||'Ingen respons.';
-    box.className='analysis-box';box.textContent=text;
-    lastAnalysis=text;lastAnalysisTitle=currentOkt.navn;
-    if(!document.getElementById('f-vurdering').value.trim())document.getElementById('f-vurdering').value=text;
+    const raw=d.text||'Ingen respons.';
+    let oppsummering='', analyse=raw;
+    try{
+      const stripped=raw.replace(/^```(?:json)?\s*/m,'').replace(/\s*```\s*$/m,'').trim();
+      const p=JSON.parse(stripped);
+      oppsummering=p.oppsummering||''; analyse=p.analyse||raw;
+    }catch(_){
+      const s=raw.indexOf('{'),e=raw.lastIndexOf('}');
+      if(s!==-1&&e>s){try{const p=JSON.parse(raw.slice(s,e+1));oppsummering=p.oppsummering||'';analyse=p.analyse||raw;}catch(_){}}
+    }
+    const displayText=oppsummering?(oppsummering+'\n\n'+analyse):analyse;
+    box.className='analysis-box';
+    renderAnalysis(displayText,box);
+    lastAnalysis=displayText;lastAnalysisTitle=currentOkt.navn;
+    // Auto-save to Notion vurdering field
+    fetch(`${workerUrl}/api/okter/${currentOkt.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({vurdering:displayText})})
+      .then(res=>{if(res.ok){currentOkt.vurdering=displayText;document.getElementById('f-vurdering').value=displayText;}});
   }catch(e){box.className='analysis-box error';box.textContent='Feil: '+e.message;}
   btn.disabled=false;btn.textContent='Analyser';
 }
@@ -2109,7 +2144,8 @@ Svar norsk, konkret, direkte.`;
     const r=await fetch(workerUrl+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:context+'\n\nSpørsmål: '+query})});
     const d=await r.json();
     const text=d.text||'Ingen respons.';
-    box.className='analysis-box';box.textContent=text;
+    box.className='analysis-box';
+    renderAnalysis(text,box);
     lastAnalysis=text;lastAnalysisTitle='Analyse: '+query.slice(0,50);
     document.getElementById('analyse-save-btn').style.display='inline-flex';
   }catch(e){box.className='analysis-box error';box.textContent='Feil: '+e.message;}
@@ -2139,6 +2175,38 @@ function formatDato(d){
   }catch(e){return d;}
 }
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// Convert simple markdown to HTML (safe — escapes first, then applies tags)
+function renderMd(text){
+  if(!text)return '';
+  return String(text)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^#{1,2} (.+)$/gm,'<span style="display:block;font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text3);letter-spacing:.06em;margin:10px 0 3px;">$1</span>')
+    .replace(/^### (.+)$/gm,'<span style="display:block;font-weight:600;color:var(--text);margin-top:6px;">$1</span>')
+    .replace(/\*\*([^*\n]+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*([^*\n]+?)\*/g,'<em>$1</em>')
+    .replace(/^[-•] (.+)$/gm,'<span style="display:block;padding-left:14px;text-indent:-10px;margin:.15em 0;">· $1</span>')
+    .replace(/\n\n/g,'<br><br>')
+    .replace(/\n/g,'<br>');
+}
+
+// Show first paragraph/sentence as summary; rest in collapsible details
+function renderAnalysis(text, el){
+  if(!text){el.innerHTML='';return;}
+  el.className=(el.className||'').replace(/\bloading\b/,'').trim();
+  const paras=text.split(/\n\n+/);
+  let summaryTxt, detailTxt;
+  if(paras.length>=2){
+    summaryTxt=paras[0];
+    detailTxt=paras.slice(1).join('\n\n');
+  } else {
+    // Single para — split on first sentence boundary
+    const m=text.match(/^(.+?[.!?])\s+([\s\S]{20,})$/);
+    if(m){summaryTxt=m[1];detailTxt=m[2];}
+    else{el.innerHTML=`<div class="analysis-summary-line">${renderMd(text)}</div>`;return;}
+  }
+  el.innerHTML=`<div class="analysis-summary-line">${renderMd(summaryTxt)}</div><details class="analysis-details"><summary class="analysis-toggle">Vis full analyse ▾</summary><div class="analysis-detail-body">${renderMd(detailTxt)}</div></details>`;
+}
 
 // ── I DAG view ────────────────────────────────────────────────────────────────
 function getTodayDate(){
@@ -2203,7 +2271,7 @@ function renderIdagView(){
         if(aiSec){
           aiSec.style.display='block';
           aiBox.className='analysis-box';
-          aiBox.textContent=todayOkt.vurdering;
+          renderAnalysis(todayOkt.vurdering,aiBox);
           aiStatus.textContent='';
         }
       }
@@ -2477,9 +2545,10 @@ async function autoLoadTodayBrief(okt){
     aiBox.className='analysis-box';
     try{
       const c=JSON.parse(cached);
-      aiBox.textContent=c.brief||cached;
+      const displayText=c.oppsummering?(c.oppsummering+'\n\n'+(c.brief||'')):c.brief||cached;
+      renderAnalysis(displayText,aiBox);
       if(c.notat){const el=document.getElementById('nc-notat');if(el)el.textContent=c.notat;}
-    }catch(_){aiBox.textContent=cached;}
+    }catch(_){renderAnalysis(cached,aiBox);}
     aiStatus.textContent='📋 Økt-brief';
     return;
   }
@@ -2552,29 +2621,31 @@ ${DAY_LABELS[nutritionTargets.dayType]||'—'} · Mål: ${nutritionTargets.targe
 Protein: ${nutritionTargets.proteinG}g | Karbo: ${nutritionTargets.carbsG}g | Fett: ${nutritionTargets.fatG}g
 ${nutritionTargets.activeKcal>0?`Garmin aktive kcal: ${nutritionTargets.activeKcal} × ${nutritionTargets.adjustedActivity/nutritionTargets.activeKcal|0===0?(nutritionTargets.activeKcal>0?Math.round(nutritionTargets.adjustedActivity/nutritionTargets.activeKcal*100)+'%':'—'):'—'} = ${nutritionTargets.adjustedActivity} kcal justert`:'Ingen aktivitetsdata'}
 
-Svar med GYLDIG JSON og INGEN ANNEN TEKST:
-{"brief":"coaching-brief på norsk (4–6 setninger). Vurder: 1) Restitusjons-status ut fra søvntrend og belastning. 2) Konkret intensitetsguidance med HR-tall fra sonene. 3) Én setning om timing/matkvalitet for dagens energimål.","notat":"ett konkret tips om mattiming eller matkvalitet for ${DAY_LABELS[nutritionTargets.dayType]||'i dag'} (én setning)"}`;
+Svar med GYLDIG JSON og INGEN ANNEN TEKST (ingen markdown i feltene):
+{"oppsummering":"1 setning: form-status + viktigste fokus for dagens økt","brief":"coaching-brief på norsk (3–4 setninger). Vurder: 1) Restitusjons-status ut fra søvntrend og belastning. 2) Konkret intensitetsguidance med HR-tall fra sonene. 3) Timing/matkvalitet for dagens energimål.","notat":"ett konkret tips om mattiming eller matkvalitet for ${DAY_LABELS[nutritionTargets.dayType]||'i dag'} (én setning)"}`;
 
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const d=await r.json();
     const raw=d.text||'';
-    let briefText=raw;
-    let notat=null;
+    let briefText=raw, oppsummering='', notat=null;
     try{
       const stripped=raw.replace(/^```(?:json)?\s*/m,'').replace(/\s*```\s*$/m,'').trim();
       const parsed=JSON.parse(stripped);
       briefText=parsed.brief||raw;
+      oppsummering=parsed.oppsummering||'';
       notat=parsed.notat||parsed.nutrition?.notat||null;
     }catch(_){
       const s=raw.indexOf('{'),e=raw.lastIndexOf('}');
-      if(s!==-1&&e>s){try{const p=JSON.parse(raw.slice(s,e+1));briefText=p.brief||raw;notat=p.notat||p.nutrition?.notat||null;}catch(_){}}
+      if(s!==-1&&e>s){try{const p=JSON.parse(raw.slice(s,e+1));briefText=p.brief||raw;oppsummering=p.oppsummering||'';notat=p.notat||p.nutrition?.notat||null;}catch(_){}}
     }
     aiBox.className='analysis-box';
-    aiBox.textContent=briefText||'Ingen respons.';
+    // Show oppsummering as headline + brief in collapsible detail
+    const displayText=oppsummering?(oppsummering+'\n\n'+briefText):briefText;
+    renderAnalysis(displayText||'Ingen respons.',aiBox);
     aiStatus.textContent='📋 Økt-brief';
     if(notat){const el=document.getElementById('nc-notat');if(el)el.textContent=notat;}
-    sessionStorage.setItem(cacheKey,JSON.stringify({brief:briefText,notat}));
+    sessionStorage.setItem(cacheKey,JSON.stringify({oppsummering,brief:briefText,notat}));
   }catch(e){aiSec.style.display='none';}
 }
 

@@ -162,6 +162,13 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:var(--sans);font
 .analysis-box.loading{color:var(--text3);font-style:italic;}
 .analysis-box.error{color:var(--danger);}
 .analysis-summary-line{font-size:13px;line-height:1.65;color:var(--text);font-weight:500;}
+.sess-chk{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;transition:all .15s;}
+.sess-chk.todo{border:2px solid var(--border-hi);color:var(--text3);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.sess-chk.todo:active{background:rgba(200,240,96,0.15);border-color:var(--accent);color:var(--accent);}
+.sess-chk.done{background:rgba(200,240,96,0.15);border:2px solid rgba(200,240,96,0.4);color:var(--accent);font-weight:700;}
+.plan-badge{display:inline-block;background:var(--danger);color:#fff;border-radius:50%;width:14px;height:14px;font-size:9px;font-weight:700;line-height:14px;text-align:center;position:absolute;top:2px;right:6px;pointer-events:none;}
+.deviation-banner{background:var(--bg2);border:0.5px solid rgba(255,165,0,0.35);border-radius:var(--rlg);padding:14px;margin-top:12px;}
+.deviation-banner-lbl{font-size:10px;color:var(--warn);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
 .analysis-details{margin-top:8px;}
 .analysis-toggle{font-size:11px;color:var(--accent);cursor:pointer;list-style:none;padding:3px 0;font-family:var(--mono);user-select:none;}
 .analysis-toggle::-webkit-details-marker{display:none;}
@@ -434,6 +441,28 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
       <span id="idag-ai-status" style="font-size:10px;font-family:var(--mono);color:var(--text3);"></span>
     </div>
     <div class="analysis-box" id="idag-ai-text"></div>
+  </div>
+
+  <!-- Avviksforslag fra trener -->
+  <div class="deviation-banner" id="deviation-banner" style="display:none;">
+    <div class="deviation-banner-lbl">⚠️ Avvik fra plan</div>
+    <div id="deviation-text" style="font-size:12px;line-height:1.65;color:var(--text2);margin-bottom:10px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-accent btn-sm" style="flex:1;" onclick="openDeviationPlan()">📝 Juster plan</button>
+      <button class="btn btn-sm" onclick="dismissDeviation()">Ignorer</button>
+    </div>
+  </div>
+
+  <!-- Gi innspill til trener -->
+  <div id="quick-coach-bar" style="display:none;margin-top:10px;">
+    <button class="btn btn-sm" style="width:100%;justify-content:center;font-size:12px;" onclick="toggleQuickInput()">💬 Gi innspill til trener</button>
+    <div id="quick-input-area" style="display:none;margin-top:8px;background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:var(--rlg);padding:12px;">
+      <textarea id="quick-input-text" class="form-input" rows="2" placeholder="F.eks. 'Føler meg sliten, bør vi roe ned neste uke?' eller 'Vurderer å bytte ut tirsdagsøkta'" style="width:100%;font-family:var(--sans);font-size:12px;resize:none;margin-bottom:8px;background:transparent;border:none;padding:0;"></textarea>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-accent btn-sm" style="flex:1;" onclick="sendQuickInput()">Send til trener</button>
+        <button class="btn btn-sm" onclick="toggleQuickInput()">Avbryt</button>
+      </div>
+    </div>
   </div>
 
   <!-- Ernæring i dag -->
@@ -939,7 +968,7 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
   <button class="bn-item active" id="bn-idag" onclick="showView('idag')"><span class="bn-icon">📅</span><span>I dag</span></button>
   <button class="bn-item" id="bn-maal" onclick="showView('maal')"><span class="bn-icon">🎯</span><span>Mål</span></button>
   <button class="bn-item" id="bn-okter" onclick="showView('okter')"><span class="bn-icon">📋</span><span>Økter</span></button>
-  <button class="bn-item" id="bn-plan" onclick="showView('plan')"><span class="bn-icon">📝</span><span>Plan</span></button>
+  <button class="bn-item" id="bn-plan" onclick="showView('plan')" style="position:relative;"><span class="bn-icon">📝</span><span>Plan</span><span class="plan-badge" id="plan-badge" style="display:none;">!</span></button>
   <button class="bn-item" id="bn-innstillinger" onclick="showView('innstillinger')"><span class="bn-icon">⚙️</span><span>Innst.</span></button>
 </nav>
 </div>
@@ -1587,20 +1616,21 @@ async function autoAnalyseIdagOkt(){
   aiBox.className='analysis-box loading';
   aiBox.textContent='Claude analyserer dagens økt…';
 
-  const prompt=buildCoachContext()+'\n\n'+buildOktContext(okt)+'\n\nSvar med GYLDIG JSON og INGEN ANNEN TEKST:\n{"oppsummering":"1 setning oppsummering av gjennomføringen","analyse":"3–4 setninger konkret analyse: intensitet vs. planlagt sone, hva gikk bra, hva justeres neste gang"}';
+  const prompt=buildCoachContext()+'\n\n'+buildOktContext(okt)+'\n\nSvar med GYLDIG JSON og INGEN ANNEN TEKST:\n{"oppsummering":"1 setning oppsummering av gjennomføringen","analyse":"3–4 setninger konkret analyse: intensitet vs. planlagt sone, hva gikk bra, hva justeres neste gang","justerPlan":false,"avvik":"null, eller kort beskrivelse av avvik fra plan som bør justeres i treningsplanen (f.eks. \'HR 20 bpm over planlagt sone — kroppen er ikke restituert\')"}';
 
   try{
     const r=await fetch(url+'/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const d=await r.json();
     const raw=d.text||'';
-    let oppsummering='', analyse=raw;
+    let oppsummering='', analyse=raw, justerPlan=false, avvik=null;
     try{
       const stripped=raw.replace(/^```(?:json)?\s*/m,'').replace(/\s*```\s*$/m,'').trim();
       const p=JSON.parse(stripped);
       oppsummering=p.oppsummering||''; analyse=p.analyse||raw;
+      justerPlan=!!p.justerPlan; avvik=p.avvik&&p.avvik!=='null'?p.avvik:null;
     }catch(_){
       const s=raw.indexOf('{'),e=raw.lastIndexOf('}');
-      if(s!==-1&&e>s){try{const p=JSON.parse(raw.slice(s,e+1));oppsummering=p.oppsummering||'';analyse=p.analyse||raw;}catch(_){}}
+      if(s!==-1&&e>s){try{const p=JSON.parse(raw.slice(s,e+1));oppsummering=p.oppsummering||'';analyse=p.analyse||raw;justerPlan=!!p.justerPlan;avvik=p.avvik&&p.avvik!=='null'?p.avvik:null;}catch(_){}}
     }
     aiBox.className='analysis-box';
     const displayText=oppsummering?(oppsummering+'\n\n'+analyse):analyse;
@@ -1610,6 +1640,16 @@ async function autoAnalyseIdagOkt(){
     const saveText=displayText||analyse;
     await fetch(`${url}/api/okter/${okt.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({vurdering:saveText})});
     okt.vurdering=saveText;
+    // Show deviation banner if coach recommends plan adjustment
+    if(justerPlan&&avvik){
+      const banner=document.getElementById('deviation-banner');
+      const deviationText=document.getElementById('deviation-text');
+      if(banner&&deviationText){
+        deviationText.textContent=avvik;
+        banner.style.display='block';
+        setPlanBadge(true);
+      }
+    }
   }catch(e){
     aiBox.className='analysis-box error';
     aiBox.textContent='Kunne ikke analysere: '+e.message;
@@ -2238,7 +2278,10 @@ function renderIdagView(){
   const today=getTodayDate();
   const dates=getDateRange(7);
 
-  const todayOkt=allOkter.find(o=>o.dato===today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Mål');
+  // ALL today's sessions — sort: To Do first (most actionable), then Gjennomført
+  const todayOkter=allOkter
+    .filter(o=>o.dato===today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Mål')
+    .sort((a,b)=>{const ord={'To Do':0,'Gjennomført':1};return (ord[a.status]??2)-(ord[b.status]??2);});
   const weekOkter=allOkter.filter(o=>dates.includes(o.dato)&&o.dato!==today&&o.status!=='Hoppet over'&&o.type!=='Dagbok'&&o.type!=='Mål')
     .sort((a,b)=>new Date(a.dato)-new Date(b.dato))
     .slice(0,10);
@@ -2247,7 +2290,7 @@ function renderIdagView(){
   document.getElementById('idag-dato').textContent=todayDisplay.charAt(0).toUpperCase()+todayDisplay.slice(1);
   document.getElementById('idag-sub').textContent=new Date(today+'T12:00:00').toLocaleDateString('no-NO',{day:'numeric',month:'short',year:'numeric'});
 
-  const fase=todayOkt?.fase||localStorage.getItem('fase_navn')||'Fase 0';
+  const fase=(todayOkter[0]?.fase)||localStorage.getItem('fase_navn')||'Fase 0';
   const faseSub=(localStorage.getItem('fase_prinsipper')||'').split('\n')[0].replace(/^[•\-]\s*/,'')||'Aktiv restitusjon';
   document.getElementById('idag-fase').textContent=fase;
   document.getElementById('idag-fase-sub').textContent=faseSub;
@@ -2258,42 +2301,53 @@ function renderIdagView(){
   const aiSec=document.getElementById('idag-ai-section');
   const aiBox=document.getElementById('idag-ai-text');
   const aiStatus=document.getElementById('idag-ai-status');
+  const quickBar=document.getElementById('quick-coach-bar');
 
-  // Always compute and display nutrition targets immediately (pure JS, no API)
-  displayNutritionTargets(loadNutritionTargets(todayOkt));
+  // Nutrition targets based on first session (or null)
+  displayNutritionTargets(loadNutritionTargets(todayOkter[0]||null));
 
-  if(todayOkt){
-    dailySection.innerHTML=renderIdagOktRow(todayOkt,true);
+  if(todayOkter.length){
+    // Render ALL today sessions
+    dailySection.innerHTML=todayOkter.map(o=>renderIdagOktRow(o,todayOkter.length===1,false)).join('');
     bindIdagSessionClicks(dailySection);
-    if(todayOkt.status==='Gjennomført'){
-      // Show saved analysis for completed sessions — always overwrite stale content
-      if(todayOkt.vurdering&&todayOkt.vurdering.length>20){
-        if(aiSec){
-          aiSec.style.display='block';
-          aiBox.className='analysis-box';
-          renderAnalysis(todayOkt.vurdering,aiBox);
-          aiStatus.textContent='';
-        }
+
+    // AI section always visible when there are sessions
+    aiSec.style.display='block';
+    if(quickBar)quickBar.style.display='block';
+
+    const firstTodo=todayOkter.find(o=>o.status==='To Do');
+    // Latest completed session that has a saved analysis
+    const lastDoneWithAnalysis=[...todayOkter].reverse().find(o=>o.status==='Gjennomført'&&o.vurdering&&o.vurdering.length>20);
+
+    if(firstTodo){
+      // Brief for next session (most actionable; never clear existing analysis)
+      if(!aiBox.innerHTML||aiBox.innerHTML===''){
+        autoLoadTodayBrief(firstTodo);
+      } else {
+        // Re-run if the brief is stale (e.g. after marking another done)
+        autoLoadTodayBrief(firstTodo);
       }
-    }else if(todayOkt.status==='To Do'){
-      // Generate coaching brief for planned session
-      aiBox.textContent='';
-      autoLoadTodayBrief(todayOkt);
+    } else if(lastDoneWithAnalysis){
+      // All sessions done — show latest analysis
+      aiBox.className='analysis-box';
+      renderAnalysis(lastDoneWithAnalysis.vurdering,aiBox);
+      aiStatus.textContent='';
     }
-  }else{
+    // else: sessions exist but no data yet — leave AI box empty, don't hide section
+  } else {
     dailySection.innerHTML='<div class="empty-state"><div class="icon">✨</div>Ingen økt i dag</div>';
-    if(aiSec)aiSec.style.display='none';
+    aiSec.style.display='none';
+    if(quickBar)quickBar.style.display='none';
   }
 
   const weekSection=document.getElementById('idag-week-section');
   if(weekOkter.length){
-    // Only feature the first upcoming session if today has no session
-    const featureFirst=!todayOkt;
+    const featureFirst=!todayOkter.length;
     const firstHtml=renderIdagOktRow(weekOkter[0],false,featureFirst);
     const restHtml=weekOkter.slice(1).map(o=>renderIdagOktRow(o,false,false)).join('');
     weekSection.innerHTML=firstHtml+restHtml;
     bindIdagSessionClicks(weekSection);
-  }else{
+  } else {
     weekSection.innerHTML='<div class="empty-state"><div class="icon">📭</div>Ingen kommende økter</div>';
   }
 
@@ -2319,9 +2373,10 @@ function renderIdagOktRow(okt,featured=false,isNext=false){
             <div style="font-size:11px;color:var(--text2);font-family:var(--mono);margin-top:2px;">${dato}${okt.fase?' · '+okt.fase:''}</div>
             ${(okt.varighet||okt.distance||okt.planlagtPuls)?`<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:3px;">${[okt.varighet?okt.varighet+'min':'',okt.distance?okt.distance+'km':'',okt.planlagtPuls?'HR: '+okt.planlagtPuls:''].filter(Boolean).join(' · ')}</div>`:''}
           </div>
-          <div style="flex-shrink:0;text-align:right;">
-            ${!isDone?`<button class="okt-mark-btn" style="margin-bottom:6px;" onclick="event.stopPropagation();markAsComplete('${okt.id}')">✓ Gjennomført</button>`:''}
-            <div style="font-size:11px;color:var(--text2);font-family:var(--mono);">${hrTxt}</div>
+          <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;">
+            ${isDone
+              ? `<div class="sess-chk done">✓</div>${hrTxt!=='—'?`<div style="font-size:10px;color:var(--text2);font-family:var(--mono);text-align:center;">${hrTxt}</div>`:''}`
+              : `<div class="sess-chk todo" onclick="event.stopPropagation();markAsComplete('${okt.id}')" title="Marker som gjennomført">○</div><div style="font-size:9px;color:var(--text3);font-family:var(--mono);">TODO</div>`}
           </div>
         </div>
       </div>`;
@@ -2336,9 +2391,9 @@ function renderIdagOktRow(okt,featured=false,isNext=false){
       </div>
       <div class="okt-right">
         <div style="display:flex;gap:6px;align-items:center;">
-          ${!isDone?`<button class="okt-mark-btn" onclick="event.stopPropagation();markAsComplete('${okt.id}')">✓ Gjennomført</button>`:''}
-          <div class="okt-hr">${hrTxt}</div>
-          <div class="okt-status ${statusClass}">${statusIcon}</div>
+          ${isDone
+            ? `${hrTxt!=='—'?`<div class="okt-hr">${hrTxt}</div>`:''}<div class="sess-chk done">✓</div>`
+            : `<div class="sess-chk todo" onclick="event.stopPropagation();markAsComplete('${okt.id}')" title="Marker som gjennomført">○</div>`}
         </div>
       </div>
     </div>`;
@@ -2659,6 +2714,55 @@ async function markAsComplete(oktId){
     if(r.ok){okt.status='Gjennomført';renderIdagView();updateStats();}
     else{showToast('Klarte ikke oppdatere status','err');}
   }catch(e){showToast('Feil: '+e.message,'err');}
+}
+
+// ── Plan badge & deviation ────────────────────────────────────────────────────
+function setPlanBadge(show){
+  const b=document.getElementById('plan-badge');
+  if(b)b.style.display=show?'inline-block':'none';
+  if(show)localStorage.setItem('plan_badge','1');
+  else localStorage.removeItem('plan_badge');
+}
+
+function dismissDeviation(){
+  const banner=document.getElementById('deviation-banner');
+  if(banner)banner.style.display='none';
+  setPlanBadge(false);
+}
+
+function openDeviationPlan(){
+  const deviationText=(document.getElementById('deviation-text')||{}).textContent||'';
+  dismissDeviation();
+  showView('plan');
+  const input=document.getElementById('plan-input');
+  if(input){
+    const today=getTodayDate();
+    const done=allOkter.filter(o=>o.dato===today&&o.status==='Gjennomført');
+    const sessInfo=done.map(o=>`${o.navn}${o.faktiskSnittHR?' (HR '+o.faktiskSnittHR+'/'+(o.faktiskMaksHR||'?')+'bpm)':''}`).join(', ');
+    input.value=`Jeg fullførte ${sessInfo||'en økt'} i dag. Treneren sier: "${deviationText}". Bør vi justere treningsplanen?`;
+    input.focus();
+  }
+}
+
+// ── Quick coach input ─────────────────────────────────────────────────────────
+function toggleQuickInput(){
+  const area=document.getElementById('quick-input-area');
+  if(!area)return;
+  const open=area.style.display!=='none';
+  area.style.display=open?'none':'block';
+  if(!open)document.getElementById('quick-input-text')?.focus();
+}
+
+function sendQuickInput(){
+  const text=(document.getElementById('quick-input-text')||{}).value?.trim();
+  if(!text)return;
+  toggleQuickInput();
+  document.getElementById('quick-input-text').value='';
+  showView('plan');
+  const input=document.getElementById('plan-input');
+  if(input){input.value=text;input.focus();}
+  // Auto-send after a tick so the view transition completes
+  setTimeout(sendPlanMelding,50);
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
@@ -3903,6 +4007,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     });
   }
   showPlanEmpty();
+  // Restore plan badge if it was set in a previous session
+  if(localStorage.getItem('plan_badge'))setPlanBadge(true);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

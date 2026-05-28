@@ -222,9 +222,12 @@ details[open] .analysis-toggle{color:var(--text3);}
 a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;padding:4px 0;}
 #plan-chat{max-height:55vh;overflow-y:auto;padding-right:2px;scroll-behavior:smooth;}
 .plan-bubble-user{display:flex;justify-content:flex-end;}.plan-bubble-ai{display:flex;justify-content:flex-start;}
-.pb{max-width:86%;padding:10px 13px;font-size:13px;line-height:1.65;white-space:pre-wrap;border:0.5px solid;}
-.pb-user{background:var(--accent);color:#0f0f0f;border-color:var(--accent);border-radius:14px 14px 4px 14px;font-weight:500;}
+.pb{max-width:86%;padding:10px 13px;font-size:13px;line-height:1.65;border:0.5px solid;}
+.pb-user{background:var(--accent);color:#0f0f0f;border-color:var(--accent);border-radius:14px 14px 4px 14px;font-weight:500;white-space:pre-wrap;}
 .pb-ai{background:var(--bg3);color:var(--text);border-color:var(--border-hi);border-radius:14px 14px 14px 4px;}
+.pb-ai .analysis-summary-line{font-size:13px;color:var(--text);}
+.pb-ai .analysis-detail-body{font-size:12px;color:var(--text2);}
+.pb-ai .analysis-toggle{color:var(--accent2);}
 .plan-empty{text-align:center;padding:30px 16px;color:var(--text3);font-size:12px;line-height:1.7;}
 /* ── Training calendar ─────────────────────────────────────────────── */
 .plan-cal{padding:4px 0;}
@@ -3334,7 +3337,12 @@ function renderPlanBubble(role, text){
   wrap.className=role==='user'?'plan-bubble-user':'plan-bubble-ai';
   const bubble=document.createElement('div');
   bubble.className='pb '+(role==='user'?'pb-user':'pb-ai');
-  bubble.textContent=text;
+  if(role==='user'){
+    bubble.textContent=text;
+  } else {
+    // AI: render markdown + summary/detail collapsible
+    renderAnalysis(text, bubble);
+  }
   wrap.appendChild(bubble);
   chat.appendChild(wrap);
   chat.scrollTop=chat.scrollHeight;

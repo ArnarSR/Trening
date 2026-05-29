@@ -1792,17 +1792,26 @@ async function syncStrava(){
   const resultEl=document.getElementById('sync-result');
   if(resultEl){resultEl.textContent='';resultEl.style.color='var(--text2)';}
   try{
-    const r=await fetch(url+'/api/sync',{method:'POST'});
-    const d=await r.json();
-    if(r.ok){
-      const parts=[`✓ ${d.synced??0} oppdatert`,`${d.created??0} ny`];if(d.errors>0)parts.push(`${d.errors} feil`);
-      const msg=parts.join(', ')+` av ${d.total??'?'}`;
+    // The worker caps writes per call (Cloudflare subrequest limit). Repeat until
+    // nothing is left to sync so one click fully catches up the whole DB.
+    let totSynced=0,totCreated=0,totErrors=0,total=0,passes=0,last=null;
+    do{
+      const r=await fetch(url+'/api/sync',{method:'POST'});
+      const d=await r.json();
+      if(!r.ok){
+        if(resultEl){resultEl.textContent='✗ '+(d.error||r.status);resultEl.style.color='var(--danger)';}
+        last=null;break;
+      }
+      last=d;
+      totSynced+=d.synced??0;totCreated+=d.created??0;totErrors+=d.errors??0;total=d.total??total;passes++;
+      if(resultEl){resultEl.textContent=`Synker… ${totSynced+totCreated} av ${total}`;resultEl.style.color='var(--text2)';}
+    }while(last&&last.capped&&passes<6);
+    if(last){
+      const parts=[`✓ ${totSynced} oppdatert`,`${totCreated} ny`];if(totErrors>0)parts.push(`${totErrors} feil`);
+      const msg=parts.join(', ')+` av ${total}`;
       if(resultEl){resultEl.textContent=msg;resultEl.style.color='var(--accent)';}
       await fetchOkter();
       await autoAnalyseIdagOkt();
-    }else{
-      const msg='✗ '+(d.error||r.status);
-      if(resultEl){resultEl.textContent=msg;resultEl.style.color='var(--danger)';}
     }
   }catch(e){
     if(resultEl){resultEl.textContent='✗ '+e.message;resultEl.style.color='var(--danger)';}

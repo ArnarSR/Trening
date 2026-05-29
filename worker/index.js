@@ -466,7 +466,7 @@ async function syncStrava(env) {
     }
   }
 
-  let synced = 0, created = 0, errors = 0;
+  let synced = 0, created = 0, errors = 0, skipped = 0;
   const MAX_WRITES = 40; // Cloudflare free tier: 50 subrequest limit
 
   for (const activity of activities) {
@@ -488,6 +488,16 @@ async function syncStrava(env) {
     // Match by Strava ID first (exact dedup), fall back to date+sport (catches manually-created sessions)
     const dateSportKey = sport ? `${date}_${sport.type}` : null;
     const existing = stravaMap[stravaId] || (dateSportKey && dateSportMap[dateSportKey]);
+
+    // Skip no-op updates so the write budget is spent only on new/changed activities.
+    // Without this, re-syncing a large already-synced DB burns all 40 writes on
+    // re-patching unchanged rows and never reaches genuinely new activities.
+    if (existing && syncUnchanged(existing, { avgHR, maxHR, duration, distance, pace, sport, calories, stravaId })) {
+      stravaMap[stravaId] = existing;
+      if (dateSportKey) delete dateSportMap[dateSportKey];
+      skipped++;
+      continue;
+    }
 
     console.log(JSON.stringify({
       ts: new Date().toISOString(), event: 'sync_activity',
@@ -552,7 +562,24 @@ async function syncStrava(env) {
   }
 
   if (synced + created > 0) await env.SETTINGS.delete('okter_cache');
-  return json({ synced, created, errors, total: activities.length, capped: synced + created + errors >= MAX_WRITES });
+  return json({ synced, created, errors, skipped, total: activities.length, capped: synced + created + errors >= MAX_WRITES });
+}
+
+// Returns true when the existing Notion page already holds the same Strava-derived
+// data, so a PATCH would be a no-op. Only fields that the sync actually writes
+// (non-null Strava values) are compared.
+function syncUnchanged(existing, { avgHR, maxHR, duration, distance, pace, sport, calories, stravaId }) {
+  const p = existing.properties || {};
+  if (p['Status']?.select?.name !== 'Gjennomført') return false;
+  if ((p['Strava ID']?.rich_text?.[0]?.plain_text || null) !== stravaId) return false;
+  if (avgHR !== null && (p['Faktisk snitt HR']?.number ?? null) !== avgHR) return false;
+  if (maxHR !== null && (p['Faktisk maks HR']?.number ?? null) !== maxHR) return false;
+  if (duration !== null && (p['Varighet (min)']?.number ?? null) !== duration) return false;
+  if (distance !== null && (p['Distanse (km)']?.number ?? null) !== distance) return false;
+  if (pace && (p['Pace']?.rich_text?.[0]?.plain_text || null) !== pace) return false;
+  if (sport && (p['Sport']?.select?.name || null) !== sport.type) return false;
+  if (calories !== null && (p['Kalorier']?.number ?? null) !== calories) return false;
+  return true;
 }
 
 async function syncLatestStrava(env) {

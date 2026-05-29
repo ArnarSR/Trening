@@ -122,6 +122,18 @@ export default {
         return json(result);
       }
 
+      // GET /api/okter/:id/styrke
+      if (path.match(/^\/api\/okter\/[^/]+\/styrke$/) && request.method === 'GET') {
+        const pageId = path.split('/')[3];
+        return getStrengthExercises(env, pageId);
+      }
+
+      // POST /api/styrke/fullfor
+      if (path === '/api/styrke/fullfor' && request.method === 'POST') {
+        const body = await request.json();
+        return fullforStyrke(env, body);
+      }
+
       // PATCH /api/okter/:id
       if (path.startsWith('/api/okter/') && request.method === 'PATCH') {
         const pageId = path.replace('/api/okter/', '');
@@ -407,6 +419,111 @@ export default {
     }
   },
 };
+
+// ── Styrke (strength) endpoints ───────────────────────────────────────────────
+
+const STYRKE_DB = 'e3dacc414628424599213158694005ca';
+
+function parseExerciseText(text) {
+  // Strip bold markdown (**text** or *text*)
+  const clean = text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+  // Match "Name — 3×15" / "Name — 3x15" / "Name 3x15" / "Name 3 x 15"
+  const m = clean.match(/^(.+?)\s*[—–\-]+\s*(\d+)\s*[x×]\s*(\d+)/i)
+           || clean.match(/^(.+?)\s+(\d+)\s*[x×]\s*(\d+)/i);
+  if (m) {
+    return { navn: m[1].trim(), planlagtSett: parseInt(m[2], 10), planlagtReps: parseInt(m[3], 10) };
+  }
+  return { navn: clean, planlagtSett: null, planlagtReps: null };
+}
+
+async function getStrengthExercises(env, pageId) {
+  const cacheKey = `styrke_${pageId}`;
+  const cached = await env.SETTINGS.get(cacheKey);
+  if (cached) return json(JSON.parse(cached));
+
+  // Fetch page blocks
+  const blocksRes = await notionRequest(env, 'GET', `/blocks/${pageId}/children?page_size=100`);
+  const blocksData = await blocksRes.json();
+  if (!blocksRes.ok) return json({ error: 'Notion feil', detail: blocksData }, blocksRes.status || 500);
+
+  const todoBlocks = (blocksData.results || []).filter(b => b.type === 'to_do');
+
+  // Parse exercise info from each to_do block
+  const exercises = todoBlocks.map(block => {
+    const richText = block.to_do?.rich_text || [];
+    const text = richText.map(t => t.plain_text).join('');
+    const checked = block.to_do?.checked || false;
+    const { navn, planlagtSett, planlagtReps } = parseExerciseText(text);
+    return { navn, planlagtSett, planlagtReps, checked, notionBlockId: block.id };
+  });
+
+  if (!exercises.length) return json([]);
+
+  // Query Styrkeøvelser database for all rows (small table — no pagination needed)
+  const dbRes = await notionRequest(env, 'POST', `/databases/${STYRKE_DB}/query`, { page_size: 100 });
+  const dbData = await dbRes.json();
+  const styrkeRows = dbData.results || [];
+
+  // Build case-insensitive name → row map
+  const nameMap = {};
+  for (const row of styrkeRows) {
+    const navn = row.properties['Navn']?.title?.[0]?.plain_text || '';
+    if (navn && !nameMap[navn.toLowerCase()]) nameMap[navn.toLowerCase()] = row;
+  }
+
+  const result = exercises.map(ex => {
+    const match = nameMap[ex.navn.toLowerCase()];
+    const p = match?.properties || {};
+    return {
+      navn: ex.navn,
+      muskelgruppe: p['Muskelgruppe']?.select?.name || null,
+      utstyr: p['Utstyr']?.select?.name || null,
+      rytme: p['Rytme']?.rich_text?.[0]?.plain_text || null,
+      planlagtSett: ex.planlagtSett,
+      planlagtReps: ex.planlagtReps,
+      sisteVekt: p['Siste vekt (kg)']?.number ?? null,
+      sisteReps: p['Siste reps']?.number ?? null,
+      sisteSett: p['Siste sett']?.number ?? null,
+      sistUtfort: p['Sist utført']?.date?.start || null,
+      checked: ex.checked,
+      notionBlockId: ex.notionBlockId,
+      styrkeovelserId: match?.id || null,
+    };
+  });
+
+  // Cache for 60 s (short TTL since checklist state changes during the session)
+  await env.SETTINGS.put(cacheKey, JSON.stringify(result), { expirationTtl: 60 });
+  return json(result);
+}
+
+async function fullforStyrke(env, body) {
+  const { styrkeovelserId, notionBlockId, sett, reps, vekt, sessionPageId } = body;
+  const today = new Date().toISOString().split('T')[0];
+  const ops = [];
+
+  if (styrkeovelserId) {
+    const props = {
+      'Siste sett': { number: Number(sett) },
+      'Siste reps': { number: Number(reps) },
+      'Sist utført': { date: { start: today } },
+    };
+    if (vekt != null && vekt !== '') props['Siste vekt (kg)'] = { number: Number(vekt) };
+    ops.push(notionRequest(env, 'PATCH', `/pages/${styrkeovelserId}`, { properties: props }));
+  }
+
+  if (notionBlockId) {
+    ops.push(notionRequest(env, 'PATCH', `/blocks/${notionBlockId}`, { to_do: { checked: true } }));
+  }
+
+  await Promise.all(ops);
+
+  // Invalidate caches
+  const delOps = [env.SETTINGS.delete('okter_cache')];
+  if (sessionPageId) delOps.push(env.SETTINGS.delete(`styrke_${sessionPageId}`));
+  await Promise.all(delOps);
+
+  return json({ ok: true });
+}
 
 // ── Strava sync ───────────────────────────────────────────────────────────────
 

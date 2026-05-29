@@ -309,6 +309,22 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 .plan-subsec-hdr.closed .plan-subsec-chevron{transform:rotate(-90deg);}
 .plan-subsec-body{overflow:hidden;max-height:4000px;transition:max-height .3s ease,opacity .2s ease;opacity:1;}
 .plan-subsec-body.collapsed{max-height:0!important;opacity:0;}
+/* ── Styrke exercise cards ─────────────────────────────────────────────── */
+.st-card{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;transition:border-color .2s,background .2s;}
+.st-card.done{border-color:rgba(200,240,96,0.3);background:rgba(200,240,96,0.04);}
+.st-card-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px;}
+.st-card-meta{font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:8px;}
+.st-fields{display:flex;align-items:flex-end;gap:10px;margin-bottom:8px;}
+.st-field{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.st-field-lbl{font-size:9px;color:var(--text3);text-transform:uppercase;font-family:var(--mono);letter-spacing:.06em;}
+.st-inp{width:52px;background:var(--bg2);border:0.5px solid var(--border-hi);border-radius:7px;color:var(--text);font-size:16px;font-family:var(--mono);font-weight:600;padding:6px 4px;text-align:center;-webkit-appearance:none;-moz-appearance:textfield;}
+.st-inp:focus{outline:none;border-color:var(--accent);}
+.st-inp::-webkit-inner-spin-button,.st-inp::-webkit-outer-spin-button{-webkit-appearance:none;}
+.st-unit{font-size:10px;color:var(--text3);font-family:var(--mono);padding-bottom:8px;}
+.st-footer{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text3);font-family:var(--mono);}
+.st-done-btn{display:flex;align-items:center;gap:5px;padding:7px 14px;background:rgba(200,240,96,0.10);border:0.5px solid rgba(200,240,96,0.25);border-radius:8px;color:var(--accent);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;}
+.st-done-btn:disabled{opacity:.4;cursor:not-allowed;}
+.st-done-btn.done{background:rgba(200,240,96,0.18);border-color:var(--accent);}
 </style>
 </head>
 <body>
@@ -2065,6 +2081,104 @@ let workoutLogs = {};       // 'ei_si' → {reps, kg, done}
 let workoutExercises = null;
 let workoutSessionOkt = null;
 
+// ── Notion-backed styrke tracker ──────────────────────────────────────────────
+let styrkeData = null;      // [{...exercise}] loaded from API
+let styrkeSessionId = null; // which session the data is loaded for
+
+async function loadStyrkeOvelser(okt) {
+  const url = getWorkerUrl();
+  const el = document.getElementById('ss-styrke-list');
+  if (!el || !url) return;
+  el.innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span></div>';
+  try {
+    const res = await fetch(`${url}/api/okter/${okt.id}/styrke`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    styrkeData = await res.json();
+    styrkeSessionId = okt.id;
+    renderStyrkeList();
+  } catch(e) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--danger);padding:12px;">Kunne ikke laste øvelser: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderStyrkeList() {
+  const el = document.getElementById('ss-styrke-list');
+  const countEl = document.getElementById('ss-styrke-count');
+  if (!el || !styrkeData) return;
+  const total = styrkeData.length;
+  const done = styrkeData.filter(e => e.checked).length;
+  if (countEl) countEl.textContent = `${done}/${total}`;
+  el.innerHTML = styrkeData.map((ex, i) => {
+    const isDone = ex.checked;
+    const muscleAndEquip = [ex.muskelgruppe, ex.utstyr].filter(Boolean).join(' · ');
+    const lastParts = [];
+    if (ex.sisteSett || ex.sisteReps) lastParts.push(`Sist: ${ex.sisteSett||'?'}×${ex.sisteReps||'?'}`);
+    if (ex.sisteVekt != null) lastParts.push(`${ex.sisteVekt} kg`);
+    if (ex.sistUtfort) lastParts.push(formatDato(ex.sistUtfort));
+    const footerLeft = [ex.rytme ? 'Rytme: ' + esc(ex.rytme) : '', esc(lastParts.join(' · '))].filter(Boolean).join(' · ');
+    return `<div class="st-card${isDone?' done':''}" id="st-card-${i}">
+      <div class="st-card-title">💪 ${esc(ex.navn)}</div>
+      ${muscleAndEquip?`<div class="st-card-meta">${esc(muscleAndEquip)}</div>`:''}
+      <div class="st-fields">
+        <div class="st-field">
+          <div class="st-field-lbl">Sett</div>
+          <input class="st-inp" type="number" id="st-sett-${i}" inputmode="numeric" min="1" max="20"
+            value="${ex.sisteSett??ex.planlagtSett??''}" placeholder="${ex.planlagtSett||'—'}">
+        </div>
+        <div class="st-field">
+          <div class="st-field-lbl">Reps</div>
+          <input class="st-inp" type="number" id="st-reps-${i}" inputmode="numeric" min="1" max="100"
+            value="${ex.sisteReps??ex.planlagtReps??''}" placeholder="${ex.planlagtReps||'—'}">
+        </div>
+        <div class="st-field">
+          <div class="st-field-lbl">Vekt</div>
+          <input class="st-inp" type="number" id="st-vekt-${i}" inputmode="decimal" step="0.5" min="0"
+            value="${ex.sisteVekt!=null?ex.sisteVekt:''}" placeholder="—">
+        </div>
+        <div class="st-unit">kg</div>
+      </div>
+      <div class="st-footer">
+        <span>${footerLeft}</span>
+        <button class="st-done-btn${isDone?' done':''}" id="st-btn-${i}"
+          onclick="fullforStyrkeokt(${i})"${isDone?' disabled':''}>
+          ${isDone?'✓ Fullført':'Fullført ✓'}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function fullforStyrkeokt(i) {
+  const ex = styrkeData?.[i];
+  if (!ex || !sheetOkt) return;
+  const url = getWorkerUrl();
+  if (!url) { showToast('Sett Worker URL', 'err'); return; }
+  const sett = parseFloat(document.getElementById(`st-sett-${i}`)?.value) || ex.planlagtSett || 0;
+  const reps = parseFloat(document.getElementById(`st-reps-${i}`)?.value) || ex.planlagtReps || 0;
+  const vektEl = document.getElementById(`st-vekt-${i}`);
+  const vekt = (vektEl?.value !== '' && vektEl?.value != null) ? parseFloat(vektEl.value) : null;
+  const btn = document.getElementById(`st-btn-${i}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Lagrer…'; }
+  try {
+    const r = await fetch(url + '/api/styrke/fullfor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ styrkeovelserId: ex.styrkeovelserId, notionBlockId: ex.notionBlockId, sett, reps, vekt, sessionPageId: sheetOkt.id }),
+    });
+    if (r.ok) {
+      styrkeData[i] = { ...styrkeData[i], checked: true, sisteSett: sett, sisteReps: reps, ...(vekt != null ? { sisteVekt: vekt } : {}) };
+      renderStyrkeList();
+      showToast('✓ Øvelse fullført!', 'ok');
+    } else {
+      showToast('Feil ved lagring', 'err');
+      if (btn) { btn.disabled = false; btn.textContent = 'Fullført ✓'; }
+    }
+  } catch(e) {
+    showToast('Feil: ' + e.message, 'err');
+    if (btn) { btn.disabled = false; btn.textContent = 'Fullført ✓'; }
+  }
+}
+
 function parseExercises(vurdering) {
   if (!vurdering) return null;
   try {
@@ -2172,8 +2286,26 @@ function openSessionSheet(okt) {
   document.getElementById('ss-badges').innerHTML = badges
     .map(b => `<span class="ss-badge${b.done ? ' done' : ''}">${esc(b.label)}</span>`).join('');
 
-  // Detect strength/rehab with structured exercises
-  const isStrength = okt.type === 'Styrke' || okt.type === 'Rehab';
+  // Notion-backed styrke tracker (sport includes "Styrke")
+  const isNotionStyrke = (okt.sport || '').includes('Styrke');
+  const styrkeSec = document.getElementById('ss-styrke-section');
+  if (styrkeSec) {
+    if (isNotionStyrke) {
+      styrkeSec.style.display = 'block';
+      if (styrkeSessionId !== okt.id) {
+        styrkeData = null;
+        styrkeSessionId = null;
+        loadStyrkeOvelser(okt);
+      } else {
+        renderStyrkeList();
+      }
+    } else {
+      styrkeSec.style.display = 'none';
+    }
+  }
+
+  // Detect strength/rehab with structured exercises (JSON in vurdering)
+  const isStrength = !isNotionStyrke && (okt.type === 'Styrke' || okt.type === 'Rehab');
   const exercises   = isStrength ? parseExercises(okt.vurdering) : null;
   const isActive    = workoutSessionOkt?.id === okt.id;
 
@@ -4482,6 +4614,13 @@ if('serviceWorker' in navigator){
   <div class="ss-title" id="ss-title">—</div>
   <div class="ss-meta" id="ss-meta">—</div>
   <div id="ss-badges"></div>
+  <div id="ss-styrke-section" style="display:none;">
+    <div class="ss-section">
+      <span>Dagens øvelser</span>
+      <span id="ss-styrke-count" class="wt-count"></span>
+    </div>
+    <div id="ss-styrke-list"></div>
+  </div>
   <div id="ss-instr-section" style="display:none;">
     <div class="ss-section" id="ss-instr-label">Treningsinstruksjoner</div>
     <div class="ss-instr" id="ss-instr"></div>

@@ -23,7 +23,7 @@ jobs:
         run: npm install -g wrangler
       - name: Deploy Worker
         working-directory: worker
-        run: wrangler deploy
+        run: wrangler deploy --var DEPLOY_VERSION:${{ github.sha }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -52,6 +52,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Inject version into frontend
+        run: sed -i "s/APP_VERSION_PLACEHOLDER/${GITHUB_SHA}/g" frontend/index.html
       - name: Push frontend to gh-pages branch
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"

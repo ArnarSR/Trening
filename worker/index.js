@@ -92,6 +92,17 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // GET /api/version — public, no auth required
+    if (path === '/api/version' && request.method === 'GET') {
+      const version = env.DEPLOY_VERSION || 'dev';
+      let deployedAt = await env.SETTINGS.get(`version_deployed_at_${version}`);
+      if (!deployedAt) {
+        deployedAt = new Date().toISOString();
+        await env.SETTINGS.put(`version_deployed_at_${version}`, deployedAt, { expirationTtl: 60 * 60 * 24 * 90 });
+      }
+      return json({ version, deployedAt });
+    }
+
     const authErr = requireAuth(request, env);
     if (authErr) return authErr;
 
@@ -442,9 +453,21 @@ async function getStrengthExercises(env, pageId) {
   if (cached) return json(JSON.parse(cached));
 
   // Fetch page blocks
-  const blocksRes = await notionRequest(env, 'GET', `/blocks/${pageId}/children?page_size=100`);
-  const blocksData = await blocksRes.json();
-  if (!blocksRes.ok) return json({ error: 'Notion feil', detail: blocksData }, blocksRes.status || 500);
+  let blocksRes, blocksData;
+  try {
+    blocksRes = await notionRequest(env, 'GET', `/blocks/${pageId}/children?page_size=100`);
+    blocksData = await blocksRes.json();
+  } catch (e) {
+    console.error('styrke: blocks fetch error', pageId, e.message);
+    return json({ error: 'Nettverksfeil mot Notion', detail: e.message }, 502);
+  }
+
+  if (!blocksRes.ok) {
+    console.error('styrke: blocks not ok', pageId, blocksRes.status, JSON.stringify(blocksData));
+    return json({ error: 'Notion feil', status: blocksRes.status, detail: blocksData }, blocksRes.status || 500);
+  }
+
+  console.log('styrke: blocks ok', pageId, 'results:', blocksData.results?.length ?? 0);
 
   const todoBlocks = (blocksData.results || []).filter(b => b.type === 'to_do');
 

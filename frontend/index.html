@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Trening">
+<meta name="app-version" content="APP_VERSION_PLACEHOLDER">
 <title>Treningsdashboard — Arnar</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -325,9 +326,22 @@ a.ext{color:var(--info);text-decoration:none;font-size:12px;display:block;paddin
 .st-done-btn{display:flex;align-items:center;gap:5px;padding:7px 14px;background:rgba(200,240,96,0.10);border:0.5px solid rgba(200,240,96,0.25);border-radius:8px;color:var(--accent);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;}
 .st-done-btn:disabled{opacity:.4;cursor:not-allowed;}
 .st-done-btn.done{background:rgba(200,240,96,0.18);border-color:var(--accent);}
+/* ── App update banner ── */
+#update-banner{display:none;position:fixed;top:max(12px,var(--safe-top));left:50%;transform:translateX(-50%);z-index:9999;
+  background:var(--bg3);border:0.5px solid var(--accent);border-radius:12px;
+  box-shadow:0 4px 24px rgba(0,0,0,0.5);padding:10px 16px;
+  display:none;align-items:center;gap:10px;white-space:nowrap;
+  animation:bannerIn .25s ease;}
+@keyframes bannerIn{from{opacity:0;transform:translateX(-50%) translateY(-8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+#update-banner span{font-size:13px;color:var(--text);font-family:var(--sans);}
+#update-banner button{padding:6px 13px;background:var(--accent);color:#111;border:none;border-radius:8px;font-size:12px;font-weight:600;font-family:var(--sans);cursor:pointer;white-space:nowrap;}
 </style>
 </head>
 <body>
+<div id="update-banner" role="alert" aria-live="polite">
+  <span>🆕 Ny versjon tilgjengelig</span>
+  <button onclick="window.location.reload(true)">Oppdater nå →</button>
+</div>
 <div class="app">
 
 <aside class="sidebar">
@@ -4307,7 +4321,7 @@ async function sendPlanMelding(){
   const planlagt=allOkter.filter(o=>o.status==='To Do');
   const planSummaries=allOkter.filter(o=>o.navn?.startsWith('Treningsplan')).slice(0,2);
   const recentDagbok=allOkter.filter(o=>o.type==='Dagbok').sort((a,b)=>b.dato.localeCompare(a.dato)).slice(0,14);
-  const smerteArr=gjennomfort.filter(o=>o.smerte!=null).slice(-10);
+  const smerteArr=gjennomfort.filter(o=>o.smerte!=null).slice(0,10);
   const avgSmerte=smerteArr.length?Math.round(smerteArr.reduce((a,o)=>a+o.smerte,0)/smerteArr.length*10)/10:null;
   const weekVol=computeWeeklyVolume();
   const avgWeekMin=weekVol.length?Math.round(weekVol.reduce((a,b)=>a+b,0)/weekVol.length):null;
@@ -4315,7 +4329,7 @@ async function sendPlanMelding(){
   const faseNavn=localStorage.getItem('fase_navn')||'Fase 0';
   const today=getTodayDate();
 
-  const oktLines=gjennomfort.slice(-30).map(o=>
+  const oktLines=gjennomfort.slice(0,30).map(o=>
     [o.dato,o.sport||o.type||'?',`HR ${o.faktiskSnittHR||'?'}/${o.faktiskMaksHR||'?'}`,
      o.varighet?o.varighet+'min':'',o.pace||'',o.type||'',o.smerte!=null?`smerte:${o.smerte}`:'',
      o.vurdering?`"${o.vurdering.slice(0,60)}"`:''
@@ -4577,16 +4591,42 @@ if('serviceWorker' in navigator){
       const sw=reg.installing;
       sw.addEventListener('statechange',()=>{
         if(sw.state==='installed'&&navigator.serviceWorker.controller){
-          // New version ready — show update banner
-          const b=document.createElement('div');
-          b.style.cssText='position:fixed;bottom:0;left:0;right:0;background:var(--accent);color:#0f0f0f;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:9999;font-size:13px;font-weight:600;';
-          b.innerHTML='<span>🔄 Ny versjon klar</span><button onclick="location.reload()" style="background:#0f0f0f;color:var(--accent);border:none;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Oppdater nå</button>';
-          document.body.appendChild(b);
+          showUpdateBanner();
         }
       });
     });
   });
 }
+
+// ── App version polling ───────────────────────────────────────────────────────
+(function(){
+  const currentVersion=(document.querySelector('meta[name="app-version"]')?.content||'').trim();
+  // Only poll if we have a real version (not the placeholder or empty)
+  if(!currentVersion||currentVersion==='APP_VERSION_PLACEHOLDER') return;
+
+  function showUpdateBanner(){
+    const b=document.getElementById('update-banner');
+    if(b) b.style.display='flex';
+  }
+  window.showUpdateBanner=showUpdateBanner;
+
+  async function checkVersion(){
+    const url=getWorkerUrl();
+    if(!url) return;
+    try{
+      const r=await fetch(url+'/api/version');
+      if(!r.ok) return;
+      const d=await r.json();
+      if(d.version&&d.version!==currentVersion&&d.version!=='dev'){
+        showUpdateBanner();
+      }
+    }catch(_){}
+  }
+
+  // First check after 30s (give app time to load), then every 5 minutes
+  setTimeout(checkVersion,30000);
+  setInterval(checkVersion,5*60*1000);
+})();
 </script>
 <div class="hand-modal-backdrop" id="hand-modal-backdrop" onclick="closeHandSystemModal()">
   <div class="hand-modal" onclick="event.stopPropagation()">

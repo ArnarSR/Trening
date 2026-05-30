@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trener v2">
+<meta name="app-version" content="APP_VERSION_PLACEHOLDER">
+<title>Treningscoach</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0f0f0f;--bg2:#181818;--bg3:#242424;--bg4:#2e2e2e;
+  --border:rgba(255,255,255,0.07);--border-hi:rgba(255,255,255,0.14);
+  --text:#f0ede8;--text2:#999;--text3:#555;
+  --green:#c8f060;--yellow:#ffb347;--red:#ff6b6b;--blue:#60b4ff;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+  --r:10px;--rlg:14px;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --tab-h:56px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);}
+.app{display:flex;flex-direction:column;height:100%;max-width:480px;margin:0 auto;position:relative;}
+
+/* ── Tabs ── */
+.tabs{display:flex;background:var(--bg2);border-top:0.5px solid var(--border);
+  height:calc(var(--tab-h) + var(--safe-bottom));padding-bottom:var(--safe-bottom);
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:100;}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;font-size:10px;color:var(--text3);cursor:pointer;padding-top:8px;
+  -webkit-tap-highlight-color:transparent;transition:color .15s;border:none;background:none;}
+.tab.active{color:var(--green);}
+.tab-icon{font-size:20px;}
+
+/* ── Views ── */
+.view{display:none;flex:1;overflow-y:auto;padding:16px 16px calc(var(--tab-h) + var(--safe-bottom) + 16px);
+  padding-top:calc(16px + var(--safe-top));}
+.view.active{display:block;}
+
+/* ── Cards ── */
+.card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:12px;}
+.card-title{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);
+  font-family:var(--mono);margin-bottom:10px;}
+.card-value{font-size:28px;font-weight:600;line-height:1;}
+.card-sub{font-size:12px;color:var(--text2);margin-top:4px;}
+
+/* ── Readiness signal ── */
+.signal-ring{width:96px;height:96px;border-radius:50%;border:3px solid var(--border);
+  display:flex;align-items:center;justify-content:center;flex-direction:column;
+  margin:0 auto 16px;transition:border-color .3s;}
+.signal-ring.green{border-color:var(--green);box-shadow:0 0 20px rgba(200,240,96,0.2);}
+.signal-ring.yellow{border-color:var(--yellow);box-shadow:0 0 20px rgba(255,179,71,0.2);}
+.signal-ring.red{border-color:var(--red);box-shadow:0 0 20px rgba(255,107,107,0.2);}
+.signal-score{font-size:26px;font-weight:700;font-family:var(--mono);}
+.signal-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-family:var(--mono);}
+.signal-ring.green .signal-label{color:var(--green);}
+.signal-ring.yellow .signal-label{color:var(--yellow);}
+.signal-ring.red .signal-label{color:var(--red);}
+
+.reason-list{list-style:none;}
+.reason-list li{font-size:13px;color:var(--text2);padding:4px 0;border-bottom:0.5px solid var(--border);}
+.reason-list li:last-child{border-bottom:none;}
+.reason-list li::before{content:'• ';color:var(--text3);}
+
+/* ── Prescription badge ── */
+.prescription{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;
+  font-size:12px;font-weight:500;font-family:var(--mono);margin-top:12px;}
+.prescription.as_planned{background:rgba(200,240,96,0.1);color:var(--green);border:0.5px solid rgba(200,240,96,0.3);}
+.prescription.reduce_intensity{background:rgba(255,179,71,0.1);color:var(--yellow);border:0.5px solid rgba(255,179,71,0.3);}
+.prescription.swap_easy{background:rgba(255,179,71,0.12);color:var(--yellow);border:0.5px solid rgba(255,179,71,0.4);}
+.prescription.rest{background:rgba(255,107,107,0.1);color:var(--red);border:0.5px solid rgba(255,107,107,0.3);}
+
+/* ── Coach text ── */
+.coach-text{font-size:14px;line-height:1.6;color:var(--text);white-space:pre-wrap;}
+.coach-text strong,.coach-text b{color:var(--green);}
+
+/* ── Metrics row ── */
+.metrics-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.metric-chip{background:var(--bg3);border:0.5px solid var(--border);border-radius:10px;padding:10px 12px;}
+.metric-chip-label{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);font-family:var(--mono);}
+.metric-chip-value{font-size:20px;font-weight:700;font-family:var(--mono);margin-top:2px;}
+.metric-chip-sub{font-size:10px;color:var(--text2);margin-top:1px;}
+.acwr-ok{color:var(--green);} .acwr-warn{color:var(--yellow);} .acwr-risk{color:var(--red);}
+
+/* ── Session cards ── */
+.session-card{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r);
+  padding:12px 14px;margin-bottom:8px;}
+.session-card.today-card{border-color:rgba(200,240,96,0.25);background:rgba(200,240,96,0.03);}
+.session-date{font-size:10px;color:var(--text3);font-family:var(--mono);}
+.session-name{font-size:14px;font-weight:600;margin:2px 0;}
+.session-meta{font-size:11px;color:var(--text2);font-family:var(--mono);}
+.session-hr{display:flex;align-items:center;gap:6px;margin-top:6px;}
+.hr-bar-wrap{flex:1;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;}
+.hr-bar{height:100%;border-radius:2px;transition:width .4s;}
+.hr-bar.green-bar{background:var(--green);} .hr-bar.yellow-bar{background:var(--yellow);} .hr-bar.red-bar{background:var(--red);}
+.adherence-badge{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:4px;}
+.adherence-badge.treff{background:rgba(200,240,96,0.15);color:var(--green);}
+.adherence-badge.for_hardt{background:rgba(255,107,107,0.15);color:var(--red);}
+.adherence-badge.for_lett{background:rgba(255,179,71,0.15);color:var(--yellow);}
+
+/* ── Chat ── */
+.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - var(--tab-h) - var(--safe-top) - var(--safe-bottom));}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px;padding-top:calc(var(--safe-top) + 16px);}
+.chat-input-row{display:flex;gap:8px;padding:10px 12px;background:var(--bg2);
+  border-top:0.5px solid var(--border);padding-bottom:calc(10px + var(--safe-bottom));}
+.chat-input{flex:1;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:10px;
+  color:var(--text);font-family:var(--sans);font-size:15px;padding:10px 14px;resize:none;
+  outline:none;max-height:120px;}
+.chat-input:focus{border-color:rgba(200,240,96,0.4);}
+.chat-send{background:var(--green);color:#111;border:none;border-radius:10px;
+  width:42px;font-size:18px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
+.chat-send:disabled{opacity:.4;}
+.bubble{max-width:85%;margin-bottom:12px;}
+.bubble.user{margin-left:auto;}
+.bubble-inner{padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.55;}
+.bubble.user .bubble-inner{background:rgba(200,240,96,0.12);border:0.5px solid rgba(200,240,96,0.2);color:var(--text);border-bottom-right-radius:4px;}
+.bubble.ai .bubble-inner{background:var(--bg3);border:0.5px solid var(--border);color:var(--text);border-bottom-left-radius:4px;}
+.bubble-meta{font-size:10px;color:var(--text3);margin-top:4px;font-family:var(--mono);}
+.bubble.user .bubble-meta{text-align:right;}
+.plan-apply-btn{display:block;width:100%;margin-top:10px;padding:10px;background:rgba(200,240,96,0.1);
+  border:0.5px solid rgba(200,240,96,0.3);border-radius:8px;color:var(--green);
+  font-size:12px;font-weight:500;cursor:pointer;text-align:center;}
+
+/* ── Intensity view ── */
+.adherence-summary{display:flex;align-items:center;gap:16px;padding:16px;
+  background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);margin-bottom:12px;}
+.adherence-rate-big{font-size:48px;font-weight:700;font-family:var(--mono);}
+.adherence-rate-big.good{color:var(--green);} .adherence-rate-big.ok{color:var(--yellow);} .adherence-rate-big.bad{color:var(--red);}
+.intensity-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);}
+.intensity-row:last-child{border-bottom:none;}
+.intensity-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.intensity-dot.treff{background:var(--green);} .intensity-dot.for_hardt{background:var(--red);} .intensity-dot.for_lett{background:var(--yellow);}
+.intensity-name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.intensity-hr{font-size:11px;color:var(--text2);font-family:var(--mono);}
+.intensity-target{font-size:10px;color:var(--text3);font-family:var(--mono);}
+
+/* ── Health input ── */
+.health-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.hf-group{display:flex;flex-direction:column;gap:4px;}
+.hf-label{font-size:10px;color:var(--text3);text-transform:uppercase;font-family:var(--mono);letter-spacing:.06em;}
+.hf-input{background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:8px;
+  color:var(--text);font-family:var(--mono);font-size:16px;font-weight:600;padding:8px;text-align:center;}
+.hf-input:focus{outline:none;border-color:rgba(200,240,96,0.4);}
+
+/* ── Settings ── */
+.settings-group{margin-bottom:20px;}
+.settings-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);
+  font-family:var(--mono);margin-bottom:8px;}
+.settings-input{width:100%;background:var(--bg3);border:0.5px solid var(--border-hi);border-radius:8px;
+  color:var(--text);font-family:var(--sans);font-size:14px;padding:10px 12px;}
+.settings-input:focus{outline:none;border-color:rgba(200,240,96,0.4);}
+textarea.settings-input{resize:vertical;min-height:80px;}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;
+  border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--sans);
+  border:0.5px solid var(--border);background:var(--bg3);color:var(--text);
+  -webkit-tap-highlight-color:transparent;transition:all .15s;}
+.btn-accent{background:var(--green);color:#111;border-color:var(--green);}
+.btn-full{width:100%;justify-content:center;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* ── Spinner ── */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);
+  border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── Toast ── */
+#toast{position:fixed;top:calc(12px + var(--safe-top));left:50%;transform:translateX(-50%);
+  background:var(--bg3);border:0.5px solid var(--border);border-radius:10px;
+  padding:8px 16px;font-size:13px;z-index:9999;transition:opacity .3s;white-space:nowrap;}
+
+/* ── Update banner ── */
+#update-banner{display:none;position:fixed;top:max(12px,var(--safe-top));left:50%;
+  transform:translateX(-50%);z-index:9998;background:var(--bg3);border:0.5px solid var(--green);
+  border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.5);padding:10px 16px;
+  align-items:center;gap:10px;white-space:nowrap;}
+#update-banner span{font-size:13px;}
+#update-banner button{padding:6px 13px;background:var(--green);color:#111;border:none;
+  border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;}
+
+/* ── Empty state ── */
+.empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:13px;}
+</style>
+</head>
+<body>
+<div id="update-banner">
+  <span>🆕 Ny versjon tilgjengelig</span>
+  <button onclick="location.reload(true)">Oppdater →</button>
+</div>
+<div id="toast" style="opacity:0;pointer-events:none;"></div>
+
+<div class="app">
+
+  <!-- ── Today view ─────────────────────────────────────────────────── -->
+  <div id="view-today" class="view active">
+    <div id="today-content"><div class="empty"><span class="spinner"></span></div></div>
+  </div>
+
+  <!-- ── Coach chat view ────────────────────────────────────────────── -->
+  <div id="view-chat" class="view" style="padding:0;">
+    <div class="chat-wrap">
+      <div id="chat-msgs" class="chat-msgs">
+        <div class="empty" style="padding-top:40px;">💬 Spør meg om trening, planen, eller be om en uke-analyse.</div>
+      </div>
+      <div class="chat-input-row">
+        <textarea id="chat-input" class="chat-input" rows="1" placeholder="Skriv til treneren…"></textarea>
+        <button id="chat-send" class="chat-send" onclick="sendChat()">↑</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Intensity view ─────────────────────────────────────────────── -->
+  <div id="view-intensity" class="view">
+    <div id="intensity-content"><div class="empty"><span class="spinner"></span></div></div>
+  </div>
+
+  <!-- ── Settings view ─────────────────────────────────────────────── -->
+  <div id="view-settings" class="view">
+    <div class="card-title" style="padding-top:8px;">Tilkobling</div>
+    <div class="settings-group">
+      <div class="settings-label">Worker URL</div>
+      <input class="settings-input" id="s-worker-url" placeholder="https://…workers.dev" oninput="saveWorkerUrl()">
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">API-token (valgfritt)</div>
+      <input class="settings-input" id="s-api-token" type="password" placeholder="sk-…" oninput="saveApiToken()">
+    </div>
+    <button class="btn btn-full" style="margin-bottom:20px;" onclick="testConnection()">Test tilkobling</button>
+
+    <div class="card-title">Profil</div>
+    <div class="settings-group">
+      <div class="health-grid">
+        <div class="hf-group"><div class="settings-label">Maks HR</div>
+          <input class="settings-input hf-input" id="s-maxhr" type="number" placeholder="195" oninput="profileDirty()"></div>
+        <div class="hf-group"><div class="settings-label">Vekt (kg)</div>
+          <input class="settings-input hf-input" id="s-vekt" type="number" placeholder="75" oninput="profileDirty()"></div>
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">Skader / smertepunkter</div>
+      <textarea class="settings-input" id="s-skader" rows="2" placeholder="Hoftefleksor venstre 2/10…" oninput="profileDirty()"></textarea>
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">Rehab-fokus (fra fysioterapeut)</div>
+      <textarea class="settings-input" id="s-rehab" rows="2" placeholder="Hoftestabilitet, unngå hopp…" oninput="profileDirty()"></textarea>
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">Fasiliteter / utstyr</div>
+      <input class="settings-input" id="s-fasiliteter" placeholder="Løpebane, vekter, tredemølle…" oninput="profileDirty()">
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">Nåværende fase</div>
+      <input class="settings-input" id="s-fase" placeholder="Fase 1 — Base" oninput="profileDirty()">
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">Fase-prinsipper</div>
+      <textarea class="settings-input" id="s-prinsipper" rows="3" placeholder="Polarisert 80/20, maks 3 harde per uke…" oninput="profileDirty()"></textarea>
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">Utøverprofil / kontekst</div>
+      <textarea class="settings-input" id="s-kontekst" rows="4" placeholder="Jeg er 35 år, løper halvmaraton, jobber mye…" oninput="profileDirty()"></textarea>
+    </div>
+    <button class="btn btn-accent btn-full" id="profile-save-btn" onclick="saveProfile()" disabled>Lagre profil</button>
+
+    <div class="card-title" style="margin-top:24px;">Registrer helse</div>
+    <div class="health-grid" style="margin-bottom:10px;">
+      <div class="hf-group"><div class="hf-label">Søvn (timer)</div>
+        <input class="hf-input settings-input" id="h-sovn" type="number" step="0.5" min="0" max="14" placeholder="7.5"></div>
+      <div class="hf-group"><div class="hf-label">HRV (ms)</div>
+        <input class="hf-input settings-input" id="h-hrv" type="number" min="0" max="200" placeholder="55"></div>
+      <div class="hf-group"><div class="hf-label">Energi (1-5)</div>
+        <input class="hf-input settings-input" id="h-energi" type="number" min="1" max="5" placeholder="3"></div>
+      <div class="hf-group"><div class="hf-label">Søvnkvalitet (1-3)</div>
+        <input class="hf-input settings-input" id="h-sovnkval" type="number" min="1" max="3" placeholder="2"></div>
+    </div>
+    <button class="btn btn-full" onclick="saveHealth()">Lagre helse</button>
+    <div id="health-status" style="font-size:12px;color:var(--text3);text-align:center;margin-top:8px;"></div>
+
+    <div class="card-title" style="margin-top:24px;">Synkronisering</div>
+    <button class="btn btn-full" onclick="syncStrava()" style="margin-bottom:8px;">🔄 Synk Strava</button>
+    <div id="sync-status" style="font-size:12px;color:var(--text3);text-align:center;"></div>
+  </div>
+
+  <!-- ── Nav tabs ──────────────────────────────────────────────────── -->
+  <nav class="tabs">
+    <button class="tab active" onclick="showView('today')">
+      <span class="tab-icon">🌅</span><span>I dag</span>
+    </button>
+    <button class="tab" onclick="showView('chat')">
+      <span class="tab-icon">💬</span><span>Trener</span>
+    </button>
+    <button class="tab" onclick="showView('intensity')">
+      <span class="tab-icon">📊</span><span>Intensitet</span>
+    </button>
+    <button class="tab" onclick="showView('settings')">
+      <span class="tab-icon">⚙️</span><span>Innstillinger</span>
+    </button>
+  </nav>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let athleteState  = null;
+let chatHistory   = [];
+let pendingPlan   = null;
+let profileDirtyFlag = false;
+
+// ── Routing ───────────────────────────────────────────────────────────────────
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + name)?.classList.add('active');
+  document.querySelector(`.tab[onclick="showView('${name}')"]`)?.classList.add('active');
+  if (name === 'intensity' && athleteState) renderIntensity();
+}
+
+// ── Worker connection ─────────────────────────────────────────────────────────
+function workerUrl() { return (localStorage.getItem('v2_worker_url') || '').trim(); }
+function apiToken()  { return (localStorage.getItem('v2_api_token')  || '').trim(); }
+function saveWorkerUrl() { localStorage.setItem('v2_worker_url', document.getElementById('s-worker-url').value.trim()); }
+function saveApiToken()  { localStorage.setItem('v2_api_token',  document.getElementById('s-api-token').value.trim()); }
+
+// Auto-inject auth header for all worker requests
+const _fetch = window.fetch.bind(window);
+window.fetch = function(input, init = {}) {
+  const url = workerUrl();
+  if (url && typeof input === 'string' && input.startsWith(url)) {
+    const tok = apiToken();
+    if (tok) {
+      init.headers = Object.assign({ Authorization: 'Bearer ' + tok }, init.headers || {});
+    }
+  }
+  return _fetch(input, init);
+};
+
+function api(path, opts = {}) {
+  const url = workerUrl();
+  if (!url) return Promise.reject(new Error('Sett Worker URL under Innstillinger'));
+  return fetch(url + path, opts).then(r => r.json());
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  el.style.color = type === 'err' ? 'var(--red)' : type === 'warn' ? 'var(--yellow)' : 'var(--green)';
+  el.style.borderColor = type === 'err' ? 'rgba(255,107,107,.3)' : type === 'warn' ? 'rgba(255,179,71,.3)' : 'var(--border)';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = '0'; }, 2800);
+}
+
+// ── Markdown (minimal) ────────────────────────────────────────────────────────
+function renderMd(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/\n/g,'<br>');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  loadSettingsFields();
+  if (!workerUrl()) { showView('settings'); return; }
+
+  try {
+    athleteState = await api('/api/v2/state');
+    renderToday();
+    // Load readiness text in background
+    loadReadiness();
+  } catch (e) {
+    document.getElementById('today-content').innerHTML =
+      `<div class="empty">Klarte ikke koble til Worker: ${e.message}</div>`;
+  }
+}
+
+// ── Today view ────────────────────────────────────────────────────────────────
+function renderToday() {
+  if (!athleteState) return;
+  const { readiness, metrics, sessions, profile, today } = athleteState;
+  const { acwr, adherence, painTrend, zoneDist } = metrics;
+
+  const todayOkter = sessions.today;
+  const upcoming   = sessions.upcoming.slice(0, 5);
+
+  // Prescription labels
+  const prescriptionLabels = {
+    as_planned:       '✅ Gjennomfør som planlagt',
+    reduce_intensity: '⚡ Reduser intensitet',
+    swap_easy:        '🔄 Bytt til lett aktivitet',
+    rest:             '🛌 Hvil i dag',
+  };
+
+  // ACWR colour
+  const acwrClass = !acwr.ratio ? '' :
+    acwr.ratio < 0.8 || acwr.ratio > 1.5 ? 'acwr-risk' :
+    acwr.ratio > 1.3 ? 'acwr-warn' : 'acwr-ok';
+
+  const adherenceClass = !adherence.rate ? '' :
+    adherence.rate >= 70 ? 'acwr-ok' : adherence.rate >= 50 ? 'acwr-warn' : 'acwr-risk';
+
+  const html = `
+    <!-- Readiness ring -->
+    <div class="card" style="text-align:center;">
+      <div class="signal-ring ${readiness.signal}" id="readiness-ring">
+        <span class="signal-score">${readiness.score}</span>
+        <span class="signal-label">${readiness.signal === 'green' ? 'Klar' : readiness.signal === 'yellow' ? 'Forsiktig' : 'Hvil'}</span>
+      </div>
+      <div class="prescription ${readiness.prescription}">${prescriptionLabels[readiness.prescription]}</div>
+      <ul class="reason-list" style="margin-top:12px;text-align:left;">
+        ${readiness.reasons.map(r => `<li>${r}</li>`).join('')}
+      </ul>
+      <div id="readiness-coach-text" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics-row">
+      <div class="metric-chip">
+        <div class="metric-chip-label">ACWR</div>
+        <div class="metric-chip-value ${acwrClass}">${acwr.ratio ?? '—'}</div>
+        <div class="metric-chip-sub">${acwr.acute ?? '—'} / ${acwr.chronic ?? '—'} min</div>
+      </div>
+      <div class="metric-chip">
+        <div class="metric-chip-label">Intensitetstreff</div>
+        <div class="metric-chip-value ${adherenceClass}">${adherence.rate != null ? adherence.rate + '%' : '—'}</div>
+        <div class="metric-chip-sub">${adherence.hit ?? 0}/${adherence.total ?? 0} siste ${adherence.total ?? 0} ø.</div>
+      </div>
+      ${painTrend ? `
+      <div class="metric-chip">
+        <div class="metric-chip-label">Smerte</div>
+        <div class="metric-chip-value ${painTrend.latest > 3 ? 'acwr-risk' : painTrend.latest > 1 ? 'acwr-warn' : 'acwr-ok'}">${painTrend.latest ?? '—'}/10</div>
+        <div class="metric-chip-sub">snitt ${painTrend.avg}/10</div>
+      </div>` : ''}
+      ${zoneDist ? `
+      <div class="metric-chip">
+        <div class="metric-chip-label">S1/S2</div>
+        <div class="metric-chip-value ${(zoneDist.find(z=>z.type==='Sone 2')?.pct||0)+(zoneDist.find(z=>z.type==='Sone 1')?.pct||0)>=70?'acwr-ok':'acwr-warn'}">${(zoneDist.find(z=>z.type==='Sone 2')?.pct||0) + (zoneDist.find(z=>z.type==='Sone 1')?.pct||0)}%</div>
+        <div class="metric-chip-sub">rolig base</div>
+      </div>` : ''}
+    </div>
+
+    <!-- Today's sessions -->
+    ${todayOkter.length ? `
+    <div class="card-title">I dag</div>
+    ${todayOkter.map(s => sessionCard(s, true)).join('')}` : ''}
+
+    <!-- Upcoming -->
+    ${upcoming.length ? `
+    <div class="card-title" style="margin-top:4px;">Kommende</div>
+    ${upcoming.map(s => sessionCard(s, false)).join('')}` : ''}
+  `;
+
+  document.getElementById('today-content').innerHTML = html;
+}
+
+function sessionCard(s, isToday) {
+  const adherenceClass = s._adherence || '';
+  return `<div class="session-card ${isToday ? 'today-card' : ''}">
+    <div class="session-date">${s.dato}</div>
+    <div class="session-name">${s.navn || s.type || '—'}</div>
+    <div class="session-meta">${[s.type, s.varighet ? s.varighet + ' min' : null, s.planlagtPuls ? 'HR: ' + s.planlagtPuls : null].filter(Boolean).join(' · ')}</div>
+    ${s.faktiskSnittHR && s.planlagtPuls ? `
+    <div class="session-hr">
+      <span class="adherence-badge ${adherenceClass}">${s.faktiskSnittHR} bpm</span>
+      <div class="hr-bar-wrap"><div class="hr-bar ${adherenceClass === 'treff' ? 'green-bar' : adherenceClass === 'for_hardt' ? 'red-bar' : 'yellow-bar'}" style="width:${Math.min(100, (s.faktiskSnittHR / (athleteState?.profile?.maxHR || 195)) * 100)}%"></div></div>
+    </div>` : ''}
+    ${s.vurdering ? `<div class="session-meta" style="margin-top:6px;color:var(--text3);">"${s.vurdering.slice(0,80)}"</div>` : ''}
+  </div>`;
+}
+
+async function loadReadiness() {
+  const el = document.getElementById('readiness-coach-text');
+  if (!el) return;
+  el.innerHTML = '<span class="spinner"></span>';
+  try {
+    const data = await api('/api/v2/coach/readiness');
+    el.innerHTML = `<div class="coach-text" style="font-size:13px;margin-top:4px;">${renderMd(data.text)}</div>`;
+  } catch (e) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--text3);">Kunne ikke laste coach-analyse: ${e.message}</div>`;
+  }
+}
+
+// ── Intensity view ────────────────────────────────────────────────────────────
+function renderIntensity() {
+  if (!athleteState) return;
+  const { adherence, zoneDist } = athleteState.metrics;
+  const rateClass = !adherence.rate ? '' : adherence.rate >= 70 ? 'good' : adherence.rate >= 50 ? 'ok' : 'bad';
+
+  const zoneDistHtml = zoneDist ? zoneDist.map(z => `
+    <div class="intensity-row">
+      <div class="intensity-dot" style="background:${zoneColour(z.type)}"></div>
+      <div class="intensity-name">${z.type}</div>
+      <div class="hr-bar-wrap" style="max-width:100px;">
+        <div class="hr-bar" style="background:${zoneColour(z.type)};width:${z.pct}%"></div>
+      </div>
+      <div class="intensity-hr">${z.pct}%</div>
+    </div>`).join('') : '<div class="empty">Ingen data</div>';
+
+  const sessionRows = adherence.sessions.map(s => `
+    <div class="intensity-row">
+      <div class="intensity-dot ${s.result}"></div>
+      <div class="intensity-name" title="${s.navn}">${s.dato} ${s.type}</div>
+      <div class="intensity-hr">${s.hr} bpm</div>
+      <div class="intensity-target">${s.target}</div>
+    </div>`).join('');
+
+  document.getElementById('intensity-content').innerHTML = `
+    <div class="adherence-summary">
+      <div>
+        <div class="adherence-rate-big ${rateClass}">${adherence.rate != null ? adherence.rate + '%' : '—'}</div>
+        <div style="font-size:12px;color:var(--text2);">treff siste ${adherence.total} ø.</div>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">
+          <span style="color:var(--green);">● ${adherence.hit} treff</span> &nbsp;
+          <span style="color:var(--red);">● ${adherence.tooHard} for hardt</span> &nbsp;
+          <span style="color:var(--yellow);">● ${adherence.tooEasy} for lett</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);">Mål: >70% innenfor planlagt sone</div>
+      </div>
+    </div>
+
+    <div class="card-title">Sonedistribusjon (alle gjennomførte)</div>
+    <div class="card">${zoneDistHtml}</div>
+
+    <div class="card-title">Intensitetstreff per økt (siste 20)</div>
+    <div class="card">${sessionRows || '<div class="empty">Ingen planlagte HR-data</div>'}</div>
+  `;
+}
+
+function zoneColour(type) {
+  const map = { 'Sone 2':'#60b4ff','Sone 1':'#8bffc8','Terskel':'#ffb347','Bakkeintervall':'#ff6b6b','Styrke':'#c8f060','Rehab':'#999','Race':'#ff6b6b' };
+  return map[type] || '#555';
+}
+
+// ── Coach chat ────────────────────────────────────────────────────────────────
+function renderBubble(role, text, sessions) {
+  const msgs = document.getElementById('chat-msgs');
+  const wrap = document.createElement('div');
+  wrap.className = 'bubble ' + (role === 'user' ? 'user' : 'ai');
+
+  const cleaned = text.replace(/```json[\s\S]*?```/g, '').trim();
+  wrap.innerHTML = `<div class="bubble-inner">${renderMd(cleaned)}</div>`;
+
+  if (sessions?.length) {
+    const btn = document.createElement('button');
+    btn.className = 'plan-apply-btn';
+    btn.textContent = `✅ Bruk plan (${sessions.length} endringer)`;
+    btn.onclick = () => applyPlan(sessions, btn);
+    wrap.querySelector('.bubble-inner').appendChild(btn);
+  }
+
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg   = input.value.trim();
+  if (!msg) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+  renderBubble('user', msg);
+  chatHistory.push({ role: 'user', content: msg });
+
+  const btn = document.getElementById('chat-send');
+  btn.disabled = true;
+
+  // Thinking indicator
+  const thinking = document.createElement('div');
+  thinking.className = 'bubble ai';
+  thinking.innerHTML = '<div class="bubble-inner" style="color:var(--text3);"><span class="spinner"></span> Tenker…</div>';
+  document.getElementById('chat-msgs').appendChild(thinking);
+  document.getElementById('chat-msgs').scrollTop = 99999;
+
+  try {
+    const data = await api('/api/v2/coach/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, history: chatHistory.slice(-8) }),
+    });
+    thinking.remove();
+    renderBubble('assistant', data.text, data.sessions);
+    chatHistory.push({ role: 'assistant', content: data.text });
+    if (data.sessions) pendingPlan = data.sessions;
+  } catch (e) {
+    thinking.remove();
+    renderBubble('assistant', 'Feil: ' + e.message);
+  }
+  btn.disabled = false;
+}
+
+async function applyPlan(sessions, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Oppdaterer…';
+  try {
+    await api('/api/v2/plan/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessions }),
+    });
+    btn.textContent = '✓ Plan lagt inn i Notion';
+    toast('Plan oppdatert!');
+    // Refresh state
+    athleteState = await api('/api/v2/state');
+  } catch (e) {
+    btn.textContent = '✗ Feil: ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+function profileDirty() {
+  profileDirtyFlag = true;
+  document.getElementById('profile-save-btn').disabled = false;
+}
+
+function loadSettingsFields() {
+  document.getElementById('s-worker-url').value = workerUrl();
+  document.getElementById('s-api-token').value  = apiToken();
+
+  const p = JSON.parse(localStorage.getItem('v2_profile_cache') || '{}');
+  if (p.maxHR)          document.getElementById('s-maxhr').value      = p.maxHR;
+  if (p.vekt)           document.getElementById('s-vekt').value       = p.vekt;
+  if (p.skader)         document.getElementById('s-skader').value     = p.skader;
+  if (p.rehabFokus)     document.getElementById('s-rehab').value      = p.rehabFokus;
+  if (p.fasiliteter)    document.getElementById('s-fasiliteter').value = p.fasiliteter;
+  if (p.faseNavn)       document.getElementById('s-fase').value       = p.faseNavn;
+  if (p.fasePrinsipper) document.getElementById('s-prinsipper').value = p.fasePrinsipper;
+  if (p.kontekst)       document.getElementById('s-kontekst').value   = p.kontekst;
+}
+
+async function saveProfile() {
+  const btn = document.getElementById('profile-save-btn');
+  btn.disabled = true; btn.textContent = 'Lagrer…';
+  const patch = {
+    maxHR:          Number(document.getElementById('s-maxhr').value)       || undefined,
+    vekt:           Number(document.getElementById('s-vekt').value)        || undefined,
+    skader:         document.getElementById('s-skader').value.trim()       || undefined,
+    rehabFokus:     document.getElementById('s-rehab').value.trim()        || undefined,
+    fasiliteter:    document.getElementById('s-fasiliteter').value.trim()  || undefined,
+    faseNavn:       document.getElementById('s-fase').value.trim()         || undefined,
+    fasePrinsipper: document.getElementById('s-prinsipper').value.trim()   || undefined,
+    kontekst:       document.getElementById('s-kontekst').value.trim()     || undefined,
+  };
+  // Remove undefined
+  Object.keys(patch).forEach(k => patch[k] === undefined && delete patch[k]);
+
+  try {
+    const saved = await api('/api/v2/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    localStorage.setItem('v2_profile_cache', JSON.stringify(saved));
+    toast('Profil lagret ✓');
+    btn.textContent = 'Lagre profil';
+    profileDirtyFlag = false;
+  } catch (e) {
+    toast('Feil: ' + e.message, 'err');
+    btn.disabled = false; btn.textContent = 'Lagre profil';
+  }
+}
+
+async function saveHealth() {
+  const body = {};
+  const sovn  = parseFloat(document.getElementById('h-sovn').value);
+  const hrv   = parseFloat(document.getElementById('h-hrv').value);
+  const energi = parseInt(document.getElementById('h-energi').value);
+  const sovnKval = parseInt(document.getElementById('h-sovnkval').value);
+  if (!isNaN(sovn))     body.sovnTimer    = sovn;
+  if (!isNaN(hrv))      body.hrv          = hrv;
+  if (!isNaN(energi))   body.energi       = energi;
+  if (!isNaN(sovnKval)) body.sovnKvalitet = sovnKval;
+
+  const statusEl = document.getElementById('health-status');
+  statusEl.textContent = 'Lagrer…';
+  try {
+    await api('/api/v2/health', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    statusEl.textContent = '✓ Lagret';
+    toast('Helse lagret ✓');
+    // Refresh state + readiness
+    athleteState = await api('/api/v2/state');
+    renderToday();
+    loadReadiness();
+  } catch (e) {
+    statusEl.textContent = '✗ ' + e.message;
+    toast('Feil: ' + e.message, 'err');
+  }
+}
+
+async function syncStrava() {
+  const statusEl = document.getElementById('sync-status');
+  statusEl.textContent = 'Synkroniserer…';
+  try {
+    const d = await api('/api/v2/sync', { method: 'POST' });
+    statusEl.textContent = `✓ ${d.created} nye, ${d.synced} oppdatert, ${d.skipped} uendret`;
+    if (d.created || d.synced) {
+      athleteState = await api('/api/v2/state');
+      renderToday();
+    }
+  } catch (e) {
+    statusEl.textContent = '✗ ' + e.message;
+  }
+}
+
+async function testConnection() {
+  try {
+    const d = await api('/api/v2/version');
+    toast(`✓ Koblet til — v${d.version?.slice(0,7)}`);
+  } catch (e) {
+    toast('✗ ' + e.message, 'err');
+  }
+}
+
+// ── Chat input auto-resize ────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('chat-input');
+  if (inp) {
+    inp.addEventListener('input', () => {
+      inp.style.height = 'auto';
+      inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+    });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+    });
+  }
+  init();
+});
+
+// ── Version polling ───────────────────────────────────────────────────────────
+(function(){
+  const v = (document.querySelector('meta[name="app-version"]')?.content || '').trim();
+  if (!v || v === 'APP_VERSION_PLACEHOLDER') return;
+  async function check() {
+    try {
+      const url = workerUrl(); if (!url) return;
+      const d = await fetch(url + '/api/v2/version').then(r => r.json());
+      if (d.version && d.version !== v && d.version !== 'dev') {
+        document.getElementById('update-banner').style.display = 'flex';
+      }
+    } catch {}
+  }
+  setTimeout(check, 30000);
+  setInterval(check, 5 * 60 * 1000);
+})();
+</script>
+</body>
+</html>

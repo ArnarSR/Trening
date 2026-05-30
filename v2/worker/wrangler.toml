@@ -1,0 +1,19 @@
+name = "trening-coach-v2"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+DB_ID       = "953ee9299ea345fb8a3d77cf8237116a"
+HELSE_DB_ID = "2e5c1e0abf4e4fd69c4c88ae89c32d5f"
+STYRKE_DB_ID = "e3dacc414628424599213158694005ca"
+ALLOWED_ORIGIN = "https://arnarsr.github.io"
+# DEPLOY_VERSION injected at CI time: wrangler deploy --var DEPLOY_VERSION:<sha>
+
+[[kv_namespaces]]
+binding = "KV"
+id = "8118722ea98048a2893559e06d021c74"
+
+# Secrets — set once via: wrangler secret put <NAME>
+#   NOTION_TOKEN  CLAUDE_API_KEY  API_TOKEN
+#   STRAVA_CLIENT_ID  STRAVA_CLIENT_SECRET  STRAVA_REFRESH_TOKEN
+#   GOOGLE_CLIENT_ID  GOOGLE_CLIENT_SECRET  GOOGLE_REFRESH_TOKEN  GOOGLE_CALENDAR_ID
